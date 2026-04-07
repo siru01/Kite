@@ -174,20 +174,22 @@ export function useKite(myName) {
       setupConn(conn) // for the sender side to also receive files back
     }
 
-    const transferId = crypto.randomUUID()
+    const transferId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + Math.random().toString(36).substring(2);
     addTransfer({ id: transferId, name: file.name, size: file.size, progress: 0, direction: 'send', done: false, blob: null })
 
     // Send metadata first
     conn.send({ type: 'file-meta', id: transferId, name: file.name, size: file.size })
 
-    // Read & chunk the file
-    const buffer = await file.arrayBuffer()
+    // Read & chunk the file out of storage gradually to prevent OOM
     let offset = 0
-    while (offset < buffer.byteLength) {
-      const chunk = buffer.slice(offset, offset + CHUNK_SIZE)
+    while (offset < file.size) {
+      const blobSlice = file.slice(offset, offset + CHUNK_SIZE)
+      const chunk = await blobSlice.arrayBuffer()
       conn.send({ type: 'file-chunk', id: transferId, chunk })
       offset += chunk.byteLength
-      const progress = Math.round((offset / buffer.byteLength) * 100)
+      const progress = Math.round((offset / file.size) * 100)
       updateTransfer(transferId, { progress })
       // Yield to allow UI updates
       await new Promise(r => setTimeout(r, 0))
