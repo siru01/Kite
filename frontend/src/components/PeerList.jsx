@@ -12,21 +12,21 @@ function getIcon(name) {
 
 export default function PeerList({ peers, myId, onSendFile }) {
   const fileInputRef = useRef(null)
-  const [targetPeer, setTargetPeer] = useState(null)
+  const targetPeerRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(null)
 
   const triggerFilePick = (peer) => {
-    setTargetPeer(peer)
+    targetPeerRef.current = peer
     fileInputRef.current?.click()
   }
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files)
-    if (files.length && targetPeer) {
-      files.forEach(f => onSendFile(targetPeer.id, f))
+    if (files.length && targetPeerRef.current) {
+      files.forEach(f => onSendFile(targetPeerRef.current.id, f))
     }
     e.target.value = ''
-    setTargetPeer(null)
+    targetPeerRef.current = null
   }
 
   const handleDrop = (e, peer) => {
