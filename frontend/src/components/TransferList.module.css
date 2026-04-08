@@ -74,6 +74,27 @@
 }
 .btnClear:hover { color: var(--red); border-color: var(--red); }
 
+/* Cancel button — shown during in-progress transfers */
+.btnCancel {
+  background: transparent;
+  color: var(--red, #f87171);
+  border: 1px solid var(--red, #f87171);
+  padding: 5px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btnCancel:hover {
+  background: var(--red, #f87171);
+  color: #fff;
+}
+
+/* Cancelled item — muted appearance */
+.cancelled {
+  opacity: 0.55;
+}
+
 /* Progress */
 .progressTrack {
   height: 4px;
@@ -89,11 +110,12 @@
   transition: width 0.2s ease;
 }
 
-[data-done="true"] { background: var(--green); }
+[data-done="true"]      { background: var(--green); }
+[data-cancelled="true"] { background: var(--red, #f87171); }
 
 .progressLabel {
   font-size: 11px;
   color: var(--text2);
   margin-top: 5px;
   text-align: right;
-}
+}
