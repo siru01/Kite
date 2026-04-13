@@ -60,11 +60,24 @@ export default function TransferList({ transfers, onCancel, onClear }) {
     URL.revokeObjectURL(url)
   }
 
+  const getMimeType = (mimeType, name) => {
+    if (mimeType) return mimeType
+    const ext = name.split('.').pop().toLowerCase()
+    const map = {
+      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
+      'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
+      'pdf': 'application/pdf',
+      'txt': 'text/plain', 'md': 'text/markdown', 'js': 'text/javascript', 'css': 'text/css', 'html': 'text/html'
+    }
+    return map[ext] || 'application/octet-stream'
+  }
+
   const getPreviewType = (mimeType, name) => {
-    if (mimeType?.startsWith('image/')) return 'image'
-    if (mimeType?.startsWith('video/')) return 'video'
-    if (mimeType?.startsWith('text/') || name?.match(/\.(txt|js|py|css|html|md|json)$/i)) return 'text'
-    if (mimeType === 'application/pdf') return 'pdf'
+    const type = getMimeType(mimeType, name)
+    if (type.startsWith('image/')) return 'image'
+    if (type.startsWith('video/')) return 'video'
+    if (type.startsWith('text/') || name.match(/\.(txt|js|py|css|html|md|json)$/i)) return 'text'
+    if (type === 'application/pdf') return 'pdf'
     return null
   }
 

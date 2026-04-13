@@ -16,6 +16,18 @@ const ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
 
+function getMimeType(mimeType, name) {
+  if (mimeType) return mimeType
+  const ext = name.split('.').pop().toLowerCase()
+  const map = {
+    'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
+    'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
+    'pdf': 'application/pdf',
+    'txt': 'text/plain', 'md': 'text/markdown', 'js': 'text/javascript', 'css': 'text/css', 'html': 'text/html'
+  }
+  return map[ext] || 'application/octet-stream'
+}
+
 export function useKite(myName) {
   const [myId, setMyId] = useState(null)
   const [peers, setPeers] = useState([])
@@ -81,7 +93,8 @@ export function useKite(myName) {
         if (msg.type === 'file-end') {
           const inc = incomingRef.current[peerId]
           if (inc && inc.id === msg.id) {
-            const blob = new Blob(inc.chunks, { type: inc.mimeType })
+            const finalMime = getMimeType(inc.mimeType, inc.name)
+            const blob = new Blob(inc.chunks, { type: finalMime })
             updateTransfer(inc.id, { progress: 100, done: true, blob })
             delete incomingRef.current[peerId]
           }
@@ -199,7 +212,7 @@ export function useKite(myName) {
       direction: 'send',
       done: false,
       cancelled: false,
-      blob: null,
+      blob: file, // Keep the file object so the sender can preview it
     })
 
     // Sequential queue per peer to prevent chunk interleaving

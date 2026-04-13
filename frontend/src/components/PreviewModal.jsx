@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import styles from './PreviewModal.module.css'
 
 export default function PreviewModal({ file, type, onClose }) {
@@ -17,10 +17,17 @@ export default function PreviewModal({ file, type, onClose }) {
     }
   }, [file, type])
 
-  const url = URL.createObjectURL(file.blob)
+  // MEMOIZED URL: Create the URL once and only change if the blob changes.
+  // This prevents the "render loop" that was revoking the URL before the browser could load it.
+  const url = useMemo(() => {
+    if (!file.blob) return null
+    return URL.createObjectURL(file.blob)
+  }, [file.blob])
 
   useEffect(() => {
-    return () => URL.revokeObjectURL(url)
+    return () => {
+      if (url) URL.revokeObjectURL(url)
+    }
   }, [url])
 
   return (
