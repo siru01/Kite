@@ -51,25 +51,6 @@
   gap: 1.5rem;
 }
 
-/* Dark/Light Mode Icon Button */
-.themeToggleNav {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #08060d;
-  border-radius: 50%;
-  transition: background 0.2s, transform 0.2s;
-}
-
-.themeToggleNav:hover {
-  background: rgba(37, 80, 224, 0.1);
-  transform: scale(1.1);
-}
-
 .headerAvatar {
   width: 36px;
   height: 36px;
@@ -84,7 +65,7 @@
   position: relative;
   z-index: 1;
   text-align: center;
-  margin-top: -60px; /* Offset for header */
+  margin-top: -140px; /* Offset for header */
   margin-bottom: 5rem;
   pointer-events: none;
 }
@@ -183,9 +164,10 @@
 }
 
 .btnPrimary {
+  font-size: 18px ;
   background: transparent;
   color: #08060d;
-  border: 2px solid #1a1a1a;
+  border: 3px solid #1a1a1a;
   padding: 12px;
   font-family: 'Nova Square', sans-serif;
   font-weight: 1000;
@@ -217,30 +199,72 @@
 /* ── Dashboard (Main App) ────────────────────────────────────────────────── */
 
 .app {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-/* Dashboard header: logo left, pill center, icon right */
+/* Dashboard header: logo left, pill center, name+leave right */
 .dashboardHeader {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 100px;
+  right: 100px;
   height: 70px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 0 32px;
+  padding: 0px 32px;
   z-index: 1000;
+}
+
+/* Right side: name badge + leave button */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: end;
+}
+
+.nameBadge {
+  font-family: 'Nova Square', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ece4da;
+  letter-spacing: 1.5px;
+  background: rgba(8, 6, 13, 0.55);
+  border: 2px solid #1a1a1a;
+  border-radius: 999px;
+  padding: 6px 18px;
+  white-space: nowrap;
+}
+
+.btnLeaveHeader {
+  background: #ece4da;
+  color: #08060d;
+  border: 2px solid #1a1a1a;
+  padding: 6px 20px;
+  font-size: 14px;
+  font-family: 'Nova Square', sans-serif;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btnLeaveHeader:hover {
+  color: #f87171;
+  border-color: #f87171;
 }
 
 /* Centered status pill */
 .statusPillCenter {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   background: #ece4da;
   border: 2px solid #1a1a1a;
   border-radius: 999px;
@@ -248,29 +272,42 @@
   font-size: 14px;
   font-weight: 600;
   font-family: 'Nova Square', sans-serif;
-  letter-spacing: 0.5px;
+  letter-spacing: 1.5px;
   color: #08060d;
   justify-self: center;
   white-space: nowrap;
 }
 
-/* Large rounded dashboard card */
+/* Large rounded dashboard card — no page-level scroll */
 .dashboardCard {
   position: fixed;
-  top: 80px;
-  left: 24px;
-  right: 24px;
-  bottom: 24px;
+  top: 70px;
+  left: 122px;
+  right: 122px;
+  bottom: 20px;
   background: #ece4da;
   border: 2px solid #1a1a1a;
-  border-radius: 40px;
-  overflow-y: auto;
+  border-radius: 40px 40px 40px 40px;
+  overflow: hidden; /* card itself does NOT scroll */
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  padding: 0;
+  padding-bottom: 10px;
+}
+
+/* PeerList section — always visible at the top, never scrolls */
+.peerSection {
+  flex-shrink: 0;
+}
+
+/* Transfer list section — takes remaining space, scrolls independently */
+.transferSection {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 20px;
 }
 
 .statusPill {
@@ -309,7 +346,7 @@
   background: transparent;
   color: #6b6375;
   border: 1px solid #1a1a1a;
-  padding: 6px 14px;
+  padding: 10px 20px;
   font-size: 13px;
   border-radius: 8px;
   cursor: pointer;
@@ -321,39 +358,219 @@
   border-color: #f87171;
 }
 
-/* Fixed bottom-right Leave button on dashboard */
-.btnLeaveFixed {
-  position: fixed;
-  bottom: 36px;
-  right: 36px;
-  z-index: 100;
-  background: #ece4da;
-  color: #08060d;
-  border: 2px solid #1a1a1a;
-  padding: 10px 28px;
-  font-size: 15px;
-  font-family: 'Nova Square', sans-serif;
-  font-weight: 600;
-  border-radius: 999px;
-  cursor: pointer;
-  letter-spacing: 1px;
-  transition: all 0.2s;
-}
-
-.btnLeaveFixed:hover {
-  color: #f87171;
-  border-color: #f87171;
-}
-
 .tagline {
+  font-size: 50px;
   font-family: 'Nova Square', sans-serif;
   color: #08060d;
-  font-size: 1.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .hint {
-  font-size: 0.9rem;
+  font-family: 'Nova Square', sans-serif;
+  font-size: 25px;
   color: #6b6375;
-  line-height: 1.5;
+  line-height: 1.5; 
+}
+
+/* ── Mobile Responsive ───────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+
+  /* Join screen */
+  .joinScreen {
+    padding: 20px;
+  }
+
+  .joinHeadline {
+    margin-top: -80px;
+    margin-bottom: 2rem;
+  }
+
+  .headlineSub {
+    font-size: 24px;
+  }
+
+  .headlineMain {
+    font-size: 30px;
+  }
+
+  .joinCard {
+    padding: 32px 20px;
+    border-radius: 20px;
+  }
+
+  .joinForm input {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .btnPrimary {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .btnPrimary:hover:not(:disabled) {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .btnPrimary:disabled {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Join navbar */
+  .header {
+    height: 60px;
+    padding: 0 16px;
+  }
+
+  .logo {
+    font-size: 22px;
+    letter-spacing: 4px;
+  }
+
+  /* Dashboard header */
+  .dashboardHeader {
+    left: 0;
+    right: 0;
+    height: 60px;
+    padding: 0 12px;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+  }
+
+  .statusPillCenter {
+    font-size: 11px;
+    padding: 6px 12px;
+    gap: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .headerActions {
+    gap: 8px;
+  }
+
+  .nameBadge {
+    font-size: 12px;
+    padding: 4px 12px;
+  }
+
+  .btnLeaveHeader {
+    font-size: 12px;
+    padding: 4px 14px;
+  }
+
+  /* Dashboard card */
+  .dashboardCard {
+    top: 68px;
+    left: 0;
+    right: 0;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .tagline {
+    font-size: 28px;
+  }
+
+  .hint {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+
+  .joinScreen {
+    padding: 12px;
+  }
+
+  .joinHeadline {
+    margin-top: -200px;
+    margin-bottom: 1.5rem;
+  }
+
+  .headlineSub {
+    font-size: 25px;
+  }
+
+  .headlineMain {
+    font-size: 30px;
+  }
+
+  .joinCard {
+    padding: 30px 1px;
+    border-radius: 16px;
+    box-shadow: 4px 4px 0px #1a1a1a;
+  }
+
+  .avatarPreview {
+    width: 100px;
+    height: 120px;
+  }
+
+  .joinForm input {
+    width: 50%;
+  }
+
+  .btnPrimary {
+    width: 50%;
+  }
+
+  .btnPrimary:hover:not(:disabled) {
+    width: 50%;
+  }
+
+  .btnPrimary:disabled {
+    width: 50%;
+  }
+
+  .header {
+    height: 50px;
+    padding: 0 12px;
+  }
+
+  .logo {
+    font-size: 18px;
+    letter-spacing: 3px;
+  }
+
+  .dashboardHeader {
+    height: 50px;
+    padding: 0px 8px;
+    gap: 10px;
+  }
+
+  .statusPillCenter {
+    font-size: 10px;
+    padding: 4px 8px;
+    gap: 10px;
+    letter-spacing: 0;
+  }
+
+  .nameBadge {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+
+  .btnLeaveHeader {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+
+  .dashboardCard {
+    top: 80px;
+    border-radius: 18px 18px 18px 18px;
+  }
+
+  .tagline {
+    font-size: 22px;
+  }
+
+  .hint {
+    font-size: 14px;
+  }
 }

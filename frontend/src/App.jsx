@@ -9,18 +9,6 @@ const TAB_ID = Math.random().toString(36).slice(2)
 
 const AVATARS = Array.from({ length: 11 }, (_, i) => `a${i + 1}`)
 
-const SunIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-  </svg>
-)
-
-const MoonIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-  </svg>
-)
-
 export default function App() {
   const [inputName, setInputName] = useState('')
   const [selectedAvatar, setSelectedAvatar] = useState(
@@ -29,18 +17,9 @@ export default function App() {
   const [joinedAs, setJoinedAs] = useState(
     () => sessionStorage.getItem('kite_username') || null
   )
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem('kite_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-  )
   const [tabBlocked, setTabBlocked] = useState(false)
   const channelRef = useRef(null)
   const lastClickRef = useRef(0)
-
-  // ── Theme enforcement ──────────────────────────────────────────────────
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('kite_theme', theme)
-  }, [theme])
 
   // ── Single-tab enforcement via BroadcastChannel ───────────────────────────
   useEffect(() => {
@@ -106,19 +85,11 @@ export default function App() {
     lastClickRef.current = now
   }
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light')
-  }
-
   // ── Join Screen Header (Navbar) ─────────────────────────────────────────
   const navbar = (
     <header className={styles.header}>
       <span className={styles.logo}>KITE</span>
-      <div className={styles.headerRight}>
-        <button className={styles.themeToggleNav} onClick={toggleTheme}>
-          {theme === 'light' ? <MoonIcon /> : <SunIcon />}
-        </button>
-      </div>
+      <div className={styles.headerRight} />
     </header>
   )
 
@@ -128,11 +99,12 @@ export default function App() {
       <span className={styles.logo}>KITE</span>
       <div className={styles.statusPillCenter} data-status={status}>
         <span className={styles.dot} />
-        {joinedAs} &mdash; {status === 'connected' ? `${peers.length} peers nearby` : status}
+        {status === 'connected' ? `${peers.length} peers nearby` : status}
       </div>
-      <button className={styles.themeToggleNav} onClick={toggleTheme}>
-        {theme === 'light' ? <MoonIcon /> : <SunIcon />}
-      </button>
+      <div className={styles.headerActions}>
+        <span className={styles.nameBadge}>{joinedAs}</span>
+        <button onClick={handleLeave} className={styles.btnLeaveHeader}>Leave</button>
+      </div>
     </header>
   )
 
@@ -145,7 +117,7 @@ export default function App() {
         <div className={styles.joinCard}>
           <p className={styles.tagline}>Already open in another tab</p>
           <p className={styles.hint}>
-            Kite is already running in another tab or window. Switch back to it,
+            Kite is already running in another tab. Switch back to it,
             or use this tab instead.
           </p>
           <div className={styles.joinForm} style={{ marginTop: '2rem' }}>
@@ -223,17 +195,19 @@ export default function App() {
       {dashboardNavbar}
 
       <div className={styles.dashboardCard}>
-        <PeerList peers={peers} myId={myId} onSendFile={sendFile} />
+        <div className={styles.peerSection}>
+          <PeerList peers={peers} myId={myId} onSendFile={sendFile} />
+        </div>
         {transfers.length > 0 && (
-          <TransferList
-            transfers={transfers}
-            onCancel={cancelTransfer}
-            onClear={clearTransfer}
-          />
+          <div className={styles.transferSection}>
+            <TransferList
+              transfers={transfers}
+              onCancel={cancelTransfer}
+              onClear={clearTransfer}
+            />
+          </div>
         )}
       </div>
-
-      <button onClick={handleLeave} className={styles.btnLeaveFixed}>Leave</button>
     </div>
   )
 }

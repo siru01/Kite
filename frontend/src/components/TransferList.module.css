@@ -212,12 +212,51 @@
 }
 
 /* Responsive: single column on narrow screens */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .grid {
     grid-template-columns: 1fr;
   }
 
   .section {
-    padding: 0 20px 24px;
+    padding: 0 16px 24px;
+  }
+
+  .fileName {
+    max-width: 160px;
+  }
+}
+
+@media (max-width: 480px) {
+  .section {
+    padding: 0 12px 20px;
+  }
+
+  .heading {
+    font-size: 11px;
+  }
+
+  .btnSaveAll {
+    font-size: 11px;
+  }
+
+  .item {
+    padding: 10px 12px;
+  }
+
+  .fileName {
+    font-size: 12px;
+    max-width: 120px;
+  }
+
+  .fileSize {
+    font-size: 10px;
+  }
+
+  .btnSave {
+    font-size: 11px;
+  }
+
+  .btnCancel {
+    font-size: 11px;
   }
 }
