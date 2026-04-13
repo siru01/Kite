@@ -1,21 +1,34 @@
-.section { margin-bottom: 40px; }
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 16px;
+}
 
 .heading {
   font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text2);
-  margin-bottom: 16px;
+  color: var(--text);
+  margin: 0;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .list { display: flex; flex-direction: column; gap: 10px; }
 
 .item {
-  background: var(--bg2);
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 8px;
   padding: 14px 16px;
+  box-shadow: var(--shadow);
 }
 
 .itemHeader {
@@ -53,21 +66,54 @@
   max-width: 220px;
 }
 
-.fileSize { font-size: 12px; color: var(--text2); flex-shrink: 0; }
+.fileSize { font-size: 12px; color: var(--text); flex-shrink: 0; }
 
 .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 
 .btnDownload {
   background: var(--green);
   color: #0a1f14;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
   padding: 5px 12px;
+  border-radius: 6px;
 }
-.btnDownload:hover { background: #2ec48e; }
+.btnDownload:hover { background: #2ec48e; transform: translateY(-1px); }
+
+.btnPreview {
+  background: var(--code-bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 6px;
+}
+.btnPreview:hover { background: var(--border); color: var(--text-h); }
+
+.btnSecondary {
+  background: transparent;
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btnSecondary:not(:disabled):hover {
+  background: var(--code-bg);
+  border-color: var(--text);
+}
+.btnSecondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .btnClear {
   background: transparent;
-  color: var(--text2);
+  color: var(--text);
   border: 1px solid var(--border);
   padding: 5px 8px;
   font-size: 13px;
@@ -98,7 +144,7 @@
 /* Progress */
 .progressTrack {
   height: 4px;
-  background: var(--bg3);
+  background: var(--code-bg);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -115,7 +161,7 @@
 
 .progressLabel {
   font-size: 11px;
-  color: var(--text2);
+  color: var(--text);
   margin-top: 5px;
   text-align: right;
-}
+}

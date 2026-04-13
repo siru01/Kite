@@ -27,6 +27,7 @@ export function useKite(myName) {
   const peerConns = useRef({})       // peerId -> { pc, dc }
   const incomingRef = useRef({})     // peerId -> { id, name, size, chunks[] }
   const cancelledRef = useRef(new Set()) // set of cancelled transferIds
+  const sendQueues = useRef({})      // peerId -> Promise (sequential queue)
 
   // ── Transfer state helpers ────────────────────────────────────────────────
 
@@ -60,12 +61,14 @@ export function useKite(myName) {
             id: msg.id,
             name: msg.name,
             size: msg.size,
+            mimeType: msg.mimeType,
             chunks: [],
           }
           addTransfer({
             id: msg.id,
             name: msg.name,
             size: msg.size,
+            mimeType: msg.mimeType,
             progress: 0,
             direction: 'receive',
             done: false,
@@ -78,7 +81,7 @@ export function useKite(myName) {
         if (msg.type === 'file-end') {
           const inc = incomingRef.current[peerId]
           if (inc && inc.id === msg.id) {
-            const blob = new Blob(inc.chunks)
+            const blob = new Blob(inc.chunks, { type: inc.mimeType })
             updateTransfer(inc.id, { progress: 100, done: true, blob })
             delete incomingRef.current[peerId]
           }
@@ -184,10 +187,6 @@ export function useKite(myName) {
   // ── Public: send file ─────────────────────────────────────────────────────
 
   const sendFile = useCallback(async (targetPeerId, file) => {
-    let dc
-    try { dc = await connectToPeer(targetPeerId) }
-    catch (e) { console.error('[sendFile] could not open DC:', e); return }
-
     const transferId = crypto.randomUUID?.()
       ?? Date.now().toString(36) + Math.random().toString(36).slice(2)
 
@@ -195,6 +194,7 @@ export function useKite(myName) {
       id: transferId,
       name: file.name,
       size: file.size,
+      mimeType: file.type,
       progress: 0,
       direction: 'send',
       done: false,
@@ -202,34 +202,63 @@ export function useKite(myName) {
       blob: null,
     })
 
-    dc.send(JSON.stringify({ type: 'file-meta', id: transferId, name: file.name, size: file.size }))
-
-    let offset = 0
-    while (offset < file.size) {
-      // Check if cancelled
-      if (cancelledRef.current.has(transferId)) {
-        dc.send(JSON.stringify({ type: 'file-cancel', id: transferId }))
-        return
-      }
-
-      // Simple backpressure
-      while (dc.bufferedAmount > 1024 * 1024) {
-        if (cancelledRef.current.has(transferId)) {
-          dc.send(JSON.stringify({ type: 'file-cancel', id: transferId }))
-          return
-        }
-        await new Promise(r => setTimeout(r, 50))
-      }
-
-      const chunk = await file.slice(offset, offset + CHUNK_SIZE).arrayBuffer()
-      dc.send(chunk)
-      offset += chunk.byteLength
-      updateTransfer(transferId, { progress: Math.round((offset / file.size) * 100) })
-      await new Promise(r => setTimeout(r, 0)) // yield to UI
+    // Sequential queue per peer to prevent chunk interleaving
+    if (!sendQueues.current[targetPeerId]) {
+      sendQueues.current[targetPeerId] = Promise.resolve()
     }
 
-    dc.send(JSON.stringify({ type: 'file-end', id: transferId }))
-    updateTransfer(transferId, { progress: 100, done: true })
+    sendQueues.current[targetPeerId] = sendQueues.current[targetPeerId].then(async () => {
+      try {
+        if (cancelledRef.current.has(transferId)) return
+
+        let dc
+        try {
+          dc = await connectToPeer(targetPeerId)
+        } catch (e) {
+          console.error('[sendFile] could not open DC:', e)
+          updateTransfer(transferId, { done: true, cancelled: true })
+          return
+        }
+
+        dc.send(JSON.stringify({ 
+          type: 'file-meta', 
+          id: transferId, 
+          name: file.name, 
+          size: file.size, 
+          mimeType: file.type 
+        }))
+
+        let offset = 0
+        while (offset < file.size) {
+          if (cancelledRef.current.has(transferId)) {
+            dc.send(JSON.stringify({ type: 'file-cancel', id: transferId }))
+            return
+          }
+
+          while (dc.bufferedAmount > 1024 * 1024) {
+            if (cancelledRef.current.has(transferId)) {
+              dc.send(JSON.stringify({ type: 'file-cancel', id: transferId }))
+              return
+            }
+            await new Promise(r => setTimeout(r, 50))
+          }
+
+          const chunk = await file.slice(offset, offset + CHUNK_SIZE).arrayBuffer()
+          dc.send(chunk)
+          offset += chunk.byteLength
+          updateTransfer(transferId, { progress: Math.round((offset / file.size) * 100) })
+          await new Promise(r => setTimeout(r, 0))
+        }
+
+        dc.send(JSON.stringify({ type: 'file-end', id: transferId }))
+        updateTransfer(transferId, { progress: 100, done: true })
+      } catch (err) {
+        console.error('[sendFile] internal error:', err)
+        updateTransfer(transferId, { done: true, cancelled: true })
+      }
+    }).catch(err => {
+      console.warn('[sendFile] queue error:', err)
+    })
   }, [connectToPeer, updateTransfer])
 
   // ── Public: cancel a transfer ─────────────────────────────────────────────

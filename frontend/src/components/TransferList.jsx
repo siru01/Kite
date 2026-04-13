@@ -1,3 +1,6 @@
+import { useState, useEffect } from 'react'
+import JSZip from 'jszip'
+import PreviewModal from './PreviewModal'
 import styles from './TransferList.module.css'
 
 function formatBytes(bytes) {
@@ -8,6 +11,8 @@ function formatBytes(bytes) {
 }
 
 export default function TransferList({ transfers, onCancel, onClear }) {
+  const [previewFile, setPreviewFile] = useState(null)
+
   const handleDownload = (transfer) => {
     if (!transfer.blob) return
     const url = URL.createObjectURL(transfer.blob)
@@ -18,9 +23,65 @@ export default function TransferList({ transfers, onCancel, onClear }) {
     URL.revokeObjectURL(url)
   }
 
+  const handleDownloadAll = async () => {
+    const received = transfers.filter(t => t.done && t.direction === 'receive' && t.blob && !t.cancelled)
+    if (received.length === 0) return
+
+    const zip = new JSZip()
+    const nameCounts = {}
+
+    received.forEach(t => {
+      let fileName = t.name
+      if (nameCounts[fileName]) {
+        const dotIndex = fileName.lastIndexOf('.')
+        if (dotIndex !== -1) {
+          const base = fileName.substring(0, dotIndex)
+          const ext = fileName.substring(dotIndex)
+          fileName = `${base} (${nameCounts[t.name]})${ext}`
+        } else {
+          fileName = `${fileName} (${nameCounts[t.name]})`
+        }
+        nameCounts[t.name]++
+      } else {
+        nameCounts[fileName] = 1
+      }
+      zip.file(fileName, t.blob)
+    })
+
+    const content = await zip.generateAsync({ type: 'blob' })
+    const date = new Date().toISOString().split('T')[0]
+    const zipName = `Kite-Transfers-${date}.zip`
+
+    const url = URL.createObjectURL(content)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = zipName
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const getPreviewType = (mimeType, name) => {
+    if (mimeType?.startsWith('image/')) return 'image'
+    if (mimeType?.startsWith('video/')) return 'video'
+    if (mimeType?.startsWith('text/') || name?.match(/\.(txt|js|py|css|html|md|json)$/i)) return 'text'
+    if (mimeType === 'application/pdf') return 'pdf'
+    return null
+  }
+
   return (
     <section className={styles.section}>
-      <h2 className={styles.heading}>Transfers</h2>
+      <div className={styles.header}>
+        <h2 className={styles.heading}>Transfers</h2>
+        <div className={styles.controls}>
+          <button 
+            className={styles.btnSecondary} 
+            onClick={handleDownloadAll}
+            disabled={!transfers.some(t => t.done && t.direction === 'receive' && t.blob && !t.cancelled)}
+          >
+            Save All (ZIP)
+          </button>
+        </div>
+      </div>
       <div className={styles.list}>
         {[...transfers].reverse().map(t => (
           <div key={t.id} className={`${styles.item} ${t.cancelled ? styles.cancelled : ''}`}>
@@ -34,10 +95,17 @@ export default function TransferList({ transfers, onCancel, onClear }) {
               </div>
 
               <div className={styles.actions}>
+                {/* Preview button */}
+                {t.done && !t.cancelled && t.blob && getPreviewType(t.mimeType, t.name) && (
+                  <button className={styles.btnPreview} onClick={() => setPreviewFile(t)}>
+                    Preview
+                  </button>
+                )}
+
                 {/* Download button — only when fully received */}
                 {t.done && !t.cancelled && t.direction === 'receive' && t.blob && (
                   <button className={styles.btnDownload} onClick={() => handleDownload(t)}>
-                    Save file
+                    Save
                   </button>
                 )}
 
@@ -76,6 +144,14 @@ export default function TransferList({ transfers, onCancel, onClear }) {
           </div>
         ))}
       </div>
+
+      {previewFile && (
+        <PreviewModal 
+          file={previewFile} 
+          type={getPreviewType(previewFile.mimeType, previewFile.name)} 
+          onClose={() => setPreviewFile(null)} 
+        />
+      )}
     </section>
   )
 }
