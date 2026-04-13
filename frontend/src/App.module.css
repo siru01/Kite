@@ -1,130 +1,274 @@
+/* ── Join screen & Layout ─────────────────────────────────────────────────── */
+
 .joinScreen {
   min-height: 100vh;
+  height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  position: relative;
+  overflow: hidden; /* No scroll */
+}
+
+.joinBg {
+  position: fixed;
+  inset: 0;
+  background: url('/background1.png') no-repeat center center;
+  background-size: cover;
+  z-index: 0;
+}
+
+/* ── Navbar (Shared Header) ──────────────────────────────────────────────── */
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  background: transparent;
+  z-index: 1000;
+  transition: background 0.3s;
+}
+
+/* Dashboard mode header gets a background */
+.app .header {
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+}
+
+.logo {
+  font-family: 'Nova Square', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: var(--text-h);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* Dark/Light Mode Icon Button */
+.themeToggleNav {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-h);
+  border-radius: 50%;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.themeToggleNav:hover {
+  background: var(--accent-bg);
+  transform: scale(1.1);
+}
+
+.headerAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+}
+
+/* ── Join Screen Specifics ───────────────────────────────────────────────── */
+
+.joinHeadline {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  margin-top: -60px; /* Offset for header */
+  margin-bottom: 5rem;
+  pointer-events: none;
+}
+
+.headlineSub {
+  font-family: "Nova Square", sans-serif;
+  font-size: 40px;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: 3px;
+  margin-bottom: 20px;
+}
+
+.headlineMain {
+  font-family: "Nova Square", sans-serif;
+  font-size: 50px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0;
+  letter-spacing: 0.1em;
+  line-height: 1;
 }
 
 .joinCard {
-  background: var(--bg2);
-  border: 5px solid var(--border);
-  border-radius: 20px;
+  position: relative;
+  z-index: 2;
+  background: rgb(236, 228, 218);
+  border: 3px solid var(--border);
+  border-radius: 30px;
   padding: 48px 40px;
   max-width: 420px;
   width: 100%;
   text-align: center;
+  box-shadow: var(--shadow);
 }
 
-.logo {
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: 5px;
-  color: var(--text);
+/* ── Avatar Section ────────────────────────────────────────────────────────── */
+
+.avatarSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
-.tagline {
-  color: var(--text2);
-  margin-top: 25px;
-  margin-bottom: 25px;
-  font-size: 18px;
+.avatarPreview {
+  width: 110px;
+  height: 130px;
+  border: 3px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 4px 4px 0 var(--border);
 }
+
+.avatarPreview:active { transform: scale(0.95); }
+
+.avatarGalleryTrack {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.avatarGalleryImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* ── Join Form ────────────────────────────────────────────────────────────── */
 
 .joinForm {
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 1rem;
 }
 
-.joinForm input { width: 100%; text-align: center; }
+.joinForm input {
+  width: 100%;
+  text-align: center;
+  padding: 12px;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-family: var(--mono);
+  outline: none;
+}
 
 .btnPrimary {
-  background: var(--accent);
-  color: #fff;
-  padding: 11px 20px;
-  font-size: 15px;
-}
-.btnPrimary:hover:not(:disabled) { background: #5a7ef5; }
-
-.hint {
-  margin-top: 20px;
-  font-size: 12px;
-  color: var(--text2);
+  background: transparent;
+  color: var(--text-h);
+  border: 2px solid var(--border);
+  padding: 12px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-/* Main app layout */
+.btnPrimary:hover:not(:disabled) {
+  background: var(--text-h);
+  color: #e8e5e0;
+}
+
+.btnPrimary:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Dashboard (Main App) ────────────────────────────────────────────────── */
+
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 10;
-}
-
 .statusPill {
   display: flex;
   align-items: center;
-  gap: 7px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
+  gap: 8px;
+  background: var(--code-bg);
+  padding: 6px 12px;
   border-radius: 20px;
-  padding: 5px 12px;
-  font-size: 13px;
-  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 
 .dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--text2);
-  flex-shrink: 0;
+  background: var(--text-dim);
 }
 
-[data-status="connected"] .dot {
-  background: var(--green);
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
-}
-
-[data-status="connecting"] .dot {
-  background: var(--yellow);
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
+[data-status="connected"] .dot { background: var(--green); }
 
 .main {
   flex: 1;
   padding: 32px 24px;
-  max-width: 700px;
+  max-width: 800px;
   margin: 0 auto;
   width: 100%;
+  position: relative;
+  z-index: 10;
 }
 
 .btnLeave {
   background: transparent;
-  color: var(--text2);
+  color: var(--text);
   border: 1px solid var(--border);
   padding: 6px 14px;
   font-size: 13px;
   border-radius: 8px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: all 0.2s;
 }
+
 .btnLeave:hover {
-  color: var(--red, #f87171);
-  border-color: var(--red, #f87171);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.tagline {
+  font-family: 'Nova Square', sans-serif;
+  color: var(--text-h);
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.hint {
+  font-size: 0.9rem;
+  color: var(--text);
+  line-height: 1.5;
 }
