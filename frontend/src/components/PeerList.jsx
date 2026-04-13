@@ -1,15 +1,6 @@
 import { useRef, useState } from 'react'
 import styles from './PeerList.module.css'
 
-const DEVICE_ICONS = ['💻', '📱', '🖥️', '⌚', '📟']
-
-function getIcon(name) {
-  // simple hash to pick a consistent icon per name
-  let h = 0
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffff
-  return DEVICE_ICONS[h % DEVICE_ICONS.length]
-}
-
 export default function PeerList({ peers, myId, onSendFile }) {
   const fileInputRef = useRef(null)
   const targetPeerRef = useRef(null)
@@ -39,8 +30,19 @@ export default function PeerList({ peers, myId, onSendFile }) {
   if (peers.length === 0) {
     return (
       <div className={styles.empty}>
-        <div className={styles.emptyIcon}>📡</div>
-        <p className={styles.emptyTitle}>Waiting for devices…</p>
+        <div className={styles.broadcastIcon}>
+          <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" className={styles.broadcastSvg}>
+            <path className={styles.wave3} d="M14 40c0-14.36 11.64-26 26-26s26 11.64 26 26-11.64 26-26 26" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <path className={styles.wave3} d="M66 40c0 14.36-11.64 26-26 26" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <path className={styles.wave2} d="M22 40c0-9.94 8.06-18 18-18s18 8.06 18 18-8.06 18-18 18" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <path className={styles.wave2} d="M58 40c0 9.94-8.06 18-18 18" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <path className={styles.wave1} d="M30 40c0-5.52 4.48-10 10-10s10 4.48 10 10-4.48 10-10 10" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <path className={styles.wave1} d="M50 40c0 5.52-4.48 10-10 10" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <circle cx="40" cy="40" r="4" fill="#1a1a1a"/>
+            <line x1="40" y1="44" x2="40" y2="64" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <p className={styles.emptyTitle}>Waiting for devices...</p>
         <p className={styles.emptyHint}>Open Kite on another device on the same Wi-Fi and it will appear here automatically.</p>
       </div>
     )
@@ -48,7 +50,7 @@ export default function PeerList({ peers, myId, onSendFile }) {
 
   return (
     <section className={styles.section}>
-      <h2 className={styles.heading}>Nearby devices</h2>
+      <h2 className={styles.pageTitle}>Devices in the Network</h2>
       <div className={styles.grid}>
         {peers.map(peer => (
           <div
@@ -60,16 +62,16 @@ export default function PeerList({ peers, myId, onSendFile }) {
             onClick={() => triggerFilePick(peer)}
             title="Click to send a file, or drag & drop"
           >
-            <div className={styles.icon}>{getIcon(peer.name)}</div>
-            <div className={styles.peerName}>{peer.name}</div>
-            <div className={styles.peerAction}>
-              {draggingOver === peer.id ? 'Drop to send' : 'Click or drop files'}
+            <div className={styles.cardInner}>
+              <span className={styles.peerAction}>
+                {draggingOver === peer.id ? 'drop to send' : 'click or drop files'}
+              </span>
             </div>
+            <div className={styles.peerName}>{peer.name}</div>
           </div>
         ))}
       </div>
 
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"

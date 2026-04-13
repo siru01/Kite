@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import JSZip from 'jszip'
 import PreviewModal from './PreviewModal'
 import styles from './TransferList.module.css'
@@ -81,88 +81,96 @@ export default function TransferList({ transfers, onCancel, onClear }) {
     return null
   }
 
+  const hasReceived = transfers.some(t => t.done && t.direction === 'receive' && t.blob && !t.cancelled)
+
   return (
     <section className={styles.section}>
+      {/* Header row */}
       <div className={styles.header}>
-        <h2 className={styles.heading}>Transfers</h2>
-        <div className={styles.controls}>
-          <button 
-            className={styles.btnSecondary} 
-            onClick={handleDownloadAll}
-            disabled={!transfers.some(t => t.done && t.direction === 'receive' && t.blob && !t.cancelled)}
-          >
-            Save All (ZIP)
-          </button>
-        </div>
+        <span className={styles.heading}>TRANSFERS</span>
+        <button
+          className={styles.btnSaveAll}
+          onClick={handleDownloadAll}
+          disabled={!hasReceived}
+        >
+          Save All [zip]
+        </button>
       </div>
-      <div className={styles.list}>
+
+      {/* 2-column grid */}
+      <div className={styles.grid}>
         {[...transfers].reverse().map(t => (
           <div key={t.id} className={`${styles.item} ${t.cancelled ? styles.cancelled : ''}`}>
-            <div className={styles.itemHeader}>
+            {/* Progress bar at top of card */}
+            {!t.done && (
+              <div className={styles.progressTrack}>
+                <div
+                  className={styles.progressBar}
+                  data-done={t.done}
+                  data-cancelled={t.cancelled}
+                  style={{ width: `${t.progress}%` }}
+                />
+              </div>
+            )}
+
+            <div className={styles.itemRow}>
+              {/* File name + size */}
               <div className={styles.fileInfo}>
-                <span className={styles.dirBadge} data-dir={t.direction}>
-                  {t.direction === 'send' ? '↑ Sending' : '↓ Receiving'}
-                </span>
                 <span className={styles.fileName}>{t.name}</span>
                 <span className={styles.fileSize}>{formatBytes(t.size)}</span>
               </div>
 
+              {/* Actions */}
               <div className={styles.actions}>
-                {/* Preview button */}
+                {/* Preview */}
                 {t.done && !t.cancelled && t.blob && getPreviewType(t.mimeType, t.name) && (
                   <button className={styles.btnPreview} onClick={() => setPreviewFile(t)}>
-                    Preview
+                    preview
                   </button>
                 )}
 
-                {/* Download button — only when fully received */}
+                {/* Save file — only for received */}
                 {t.done && !t.cancelled && t.direction === 'receive' && t.blob && (
-                  <button className={styles.btnDownload} onClick={() => handleDownload(t)}>
-                    Save
+                  <button className={styles.btnSave} onClick={() => handleDownload(t)}>
+                    save file
                   </button>
                 )}
 
-                {/* Cancel button — only while in progress */}
+                {/* Sending label */}
+                {t.direction === 'send' && t.done && !t.cancelled && (
+                  <span className={styles.sentLabel}>sent ✓</span>
+                )}
+
+                {/* Cancel — in progress */}
                 {!t.done && (
                   <button className={styles.btnCancel} onClick={() => onCancel(t.id)}>
-                    Cancel
+                    cancel
                   </button>
                 )}
 
-                {/* Dismiss button — only when done or cancelled */}
+                {/* Dismiss ✕ */}
                 {t.done && (
-                  <button className={styles.btnClear} onClick={() => onClear(t.id)}>✕</button>
+                  <button className={styles.btnDismiss} onClick={() => onClear(t.id)}>✕</button>
                 )}
               </div>
             </div>
 
-            {/* Progress bar */}
-            <div className={styles.progressTrack}>
-              <div
-                className={styles.progressBar}
-                data-done={t.done}
-                data-cancelled={t.cancelled}
-                style={{ width: `${t.progress}%` }}
-              />
-            </div>
-
-            <div className={styles.progressLabel}>
-              {t.cancelled
-                ? 'Cancelled'
-                : t.done
-                  ? (t.direction === 'send' ? 'Sent!' : 'Received!')
-                  : `${t.progress}%`
-              }
-            </div>
+            {/* Progress label */}
+            {!t.done && !t.cancelled && (
+              <div className={styles.progressLabel}>{t.progress}%</div>
+            )}
+            {t.cancelled && (
+              <div className={styles.progressLabel}>Cancelled</div>
+            )}
           </div>
         ))}
       </div>
 
       {previewFile && (
-        <PreviewModal 
-          file={previewFile} 
-          type={getPreviewType(previewFile.mimeType, previewFile.name)} 
-          onClose={() => setPreviewFile(null)} 
+        <PreviewModal
+          file={previewFile}
+          type={getPreviewType(previewFile.mimeType, previewFile.name)}
+          onClose={() => setPreviewFile(null)}
         />
       )}
     </section>

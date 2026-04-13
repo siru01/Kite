@@ -1,167 +1,223 @@
+/* ── TransferList section ─────────────────────────────────────────────── */
+
+.section {
+  width: 100%;
+  padding: 0 40px 32px;
+  box-sizing: border-box;
+}
+
+/* Header row: TRANSFERS left, Save All right */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
 }
 
 .heading {
+  font-family: 'Nova Square', sans-serif;
   font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #08060d;
   margin: 0;
 }
 
-.controls {
+/* Save All [zip] button */
+.btnSaveAll {
+  background: transparent;
+  border: none;
+  font-family: 'Nova Square', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #08060d;
+  cursor: pointer;
+  padding: 0;
+  letter-spacing: 0.3px;
+  transition: color 0.15s;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btnSaveAll:hover:not(:disabled) {
+  color: #2550e0;
+}
+
+.btnSaveAll:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* 2-column grid of transfer items */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Individual transfer item card */
+.item {
+  background: #ece4da;
+  border: 2px solid #1a1a1a;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: opacity 0.2s;
+}
+
+.cancelled {
+  opacity: 0.45;
+}
+
+/* Row inside item: file info left, actions right */
+.itemRow {
   display: flex;
   align-items: center;
-  gap: 16px;
-}
-
-.list { display: flex; flex-direction: column; gap: 10px; }
-
-.item {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 16px;
-  box-shadow: var(--shadow);
-}
-
-.itemHeader {
-  display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 8px;
 }
 
 .fileInfo {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
-.dirBadge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 20px;
-  flex-shrink: 0;
-}
-[data-dir="send"] { background: rgba(108, 142, 247, 0.15); color: var(--accent); }
-[data-dir="receive"] { background: rgba(52, 211, 153, 0.15); color: var(--green); }
-
 .fileName {
+  font-family: 'Nova Square', sans-serif;
+  font-size: 13px;
   font-weight: 500;
-  font-size: 14px;
+  color: #08060d;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 220px;
+  max-width: 200px;
 }
 
-.fileSize { font-size: 12px; color: var(--text); flex-shrink: 0; }
-
-.actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-
-.btnDownload {
-  background: var(--green);
-  color: #0a1f14;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 6px;
+.fileSize {
+  font-size: 11px;
+  color: #6b6375;
 }
-.btnDownload:hover { background: #2ec48e; transform: translateY(-1px); }
 
-.btnPreview {
-  background: var(--code-bg);
-  color: var(--text-h);
-  border: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 12px;
-  border-radius: 6px;
+/* Actions: save file + dismiss ✕ */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
-.btnPreview:hover { background: var(--border); color: var(--text-h); }
 
-.btnSecondary {
+/* "save file" text button */
+.btnSave {
   background: transparent;
-  color: var(--text-h);
-  border: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btnSecondary:not(:disabled):hover {
-  background: var(--code-bg);
-  border-color: var(--text);
-}
-.btnSecondary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btnClear {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 5px 8px;
+  border: none;
+  font-family: 'Nova Square', sans-serif;
   font-size: 13px;
+  font-weight: 500;
+  color: #08060d;
+  cursor: pointer;
+  padding: 0;
+  letter-spacing: 0.2px;
+  transition: color 0.15s;
 }
-.btnClear:hover { color: var(--red); border-color: var(--red); }
 
-/* Cancel button — shown during in-progress transfers */
+.btnSave:hover {
+  color: #2550e0;
+}
+
+/* Preview button */
+.btnPreview {
+  background: transparent;
+  border: none;
+  font-family: 'Nova Square', sans-serif;
+  font-size: 12px;
+  color: #6b6375;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.btnPreview:hover {
+  color: #2550e0;
+}
+
+/* Sent label */
+.sentLabel {
+  font-family: 'Nova Square', sans-serif;
+  font-size: 12px;
+  color: #10b981;
+}
+
+/* Cancel button */
 .btnCancel {
   background: transparent;
-  color: var(--red, #f87171);
-  border: 1px solid var(--red, #f87171);
-  padding: 5px 12px;
-  font-size: 13px;
-  border-radius: 6px;
+  border: none;
+  font-family: 'Nova Square', sans-serif;
+  font-size: 12px;
+  color: #f87171;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  padding: 0;
+  transition: opacity 0.15s;
 }
+
 .btnCancel:hover {
-  background: var(--red, #f87171);
-  color: #fff;
+  opacity: 0.7;
 }
 
-/* Cancelled item — muted appearance */
-.cancelled {
-  opacity: 0.55;
+/* Red ✕ dismiss button */
+.btnDismiss {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  color: #f87171;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: opacity 0.15s;
+  font-weight: 700;
 }
 
-/* Progress */
+.btnDismiss:hover {
+  opacity: 0.7;
+}
+
+/* Progress bar */
 .progressTrack {
-  height: 4px;
-  background: var(--code-bg);
+  height: 3px;
+  background: rgba(26, 26, 26, 0.15);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progressBar {
   height: 100%;
-  background: var(--accent);
+  background: #1a1a1a;
   border-radius: 2px;
   transition: width 0.2s ease;
 }
 
-[data-done="true"]      { background: var(--green); }
-[data-cancelled="true"] { background: var(--red, #f87171); }
+[data-done="true"]      { background: #10b981; }
+[data-cancelled="true"] { background: #f87171; }
 
 .progressLabel {
   font-size: 11px;
-  color: var(--text);
-  margin-top: 5px;
+  color: #6b6375;
+  font-family: 'Nova Square', sans-serif;
   text-align: right;
+}
+
+/* Responsive: single column on narrow screens */
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section {
+    padding: 0 20px 24px;
+  }
 }

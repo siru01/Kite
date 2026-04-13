@@ -1,65 +1,139 @@
-.section { margin-bottom: 40px; }
+/* ── Peers section ─────────────────────────────────────────────────────── */
 
-.heading {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text2);
-  margin-bottom: 16px;
+.section {
+  width: 100%;
+  padding: 32px 40px 0;
+  box-sizing: border-box;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 14px;
-}
-
-.peerCard {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px 16px;
+.pageTitle {
+  font-family: 'Nova Square', sans-serif;
+  font-size: 22px;
+  font-weight: 500;
+  color: #08060d;
   text-align: center;
+  margin: 0 0 28px;
+  letter-spacing: 0.5px;
+}
+
+/* Peer cards - horizontal row */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+/* Square peer card */
+.peerCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   cursor: pointer;
-  transition: all 0.15s;
   user-select: none;
 }
 
-.peerCard:hover {
-  border-color: var(--accent);
-  background: var(--bg3);
-  transform: translateY(-2px);
+/* Inner bordered square */
+.cardInner {
+  width: 130px;
+  height: 110px;
+  border: 2px solid #1a1a1a;
+  border-radius: 10px;
+  background: #ece4da;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 10px;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-.dragOver {
-  border-color: var(--green) !important;
-  background: rgba(52, 211, 153, 0.08) !important;
+.peerCard:hover .cardInner {
+  background: #d8d0c6;
+  border-color: #2550e0;
 }
 
-.icon { font-size: 36px; margin-bottom: 10px; }
+.dragOver .cardInner {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.peerAction {
+  font-size: 11px;
+  color: #6b6375;
+  font-family: 'Nova Square', sans-serif;
+  letter-spacing: 0.3px;
+}
 
 .peerName {
+  font-size: 13px;
   font-weight: 600;
-  font-size: 14px;
-  color: var(--text);
-  margin-bottom: 4px;
+  color: #08060d;
+  font-family: 'Nova Square', sans-serif;
+  text-align: center;
+  max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.peerAction { font-size: 11px; color: var(--text2); }
+/* ── Empty / waiting state ─────────────────────────────────────────────── */
 
-/* Empty state */
 .empty {
+  flex: 1;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 64px 24px;
-  background: var(--bg2);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
+  padding: 20px 24px;
+  gap: 16px;
 }
 
-.emptyIcon { font-size: 48px; margin-bottom: 16px; }
-.emptyTitle { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
-.emptyHint { color: var(--text2); font-size: 14px; max-width: 300px; margin: 0 auto; }
+.broadcastIcon {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.broadcastSvg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes wavePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+
+.wave1 {
+  animation: wavePulse 1.8s ease-in-out infinite;
+  animation-delay: 0s;
+}
+.wave2 {
+  animation: wavePulse 1.8s ease-in-out infinite;
+  animation-delay: 0.3s;
+}
+.wave3 {
+  animation: wavePulse 1.8s ease-in-out infinite;
+  animation-delay: 0.6s;
+}
+
+.emptyTitle {
+  font-family: 'Nova Square', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #08060d;
+  margin: 0;
+}
+
+.emptyHint {
+  color: #6b6375;
+  font-size: 14px;
+  max-width: 300px;
+  margin: 0 auto;
+  line-height: 1.6;
+}

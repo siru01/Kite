@@ -110,33 +110,29 @@ export default function App() {
     setTheme(prev => prev === 'light' ? 'dark' : 'light')
   }
 
-  // ── Shared Header (Navbar) ────────────────────────────────────────────────
+  // ── Join Screen Header (Navbar) ─────────────────────────────────────────
   const navbar = (
     <header className={styles.header}>
       <span className={styles.logo}>KITE</span>
-      
       <div className={styles.headerRight}>
         <button className={styles.themeToggleNav} onClick={toggleTheme}>
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}
         </button>
-
-        {joinedAs && (
-          <>
-            <div className={styles.statusPill} data-status={status}>
-              <span className={styles.dot} />
-              {status === 'connected' ? `${peers.length} nearby` : status}
-            </div>
-            {sessionStorage.getItem('kite_avatar') && (
-              <img
-                src={`/${sessionStorage.getItem('kite_avatar')}.jpg`}
-                alt="profile"
-                className={styles.headerAvatar}
-              />
-            )}
-            <button onClick={handleLeave} className={styles.btnLeave}>Leave</button>
-          </>
-        )}
       </div>
+    </header>
+  )
+
+  // ── Dashboard Header ─────────────────────────────────────────────────────
+  const dashboardNavbar = (
+    <header className={styles.dashboardHeader}>
+      <span className={styles.logo}>KITE</span>
+      <div className={styles.statusPillCenter} data-status={status}>
+        <span className={styles.dot} />
+        {joinedAs} &mdash; {status === 'connected' ? `${peers.length} peers nearby` : status}
+      </div>
+      <button className={styles.themeToggleNav} onClick={toggleTheme}>
+        {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+      </button>
     </header>
   )
 
@@ -223,10 +219,10 @@ export default function App() {
   // ── Main Dashboard ────────────────────────────────────────────────────────
   return (
     <div className={styles.app}>
-      <div className={styles.joinBg} /> {/* Keep background consistent */}
-      {navbar}
+      <div className={styles.joinBg} />
+      {dashboardNavbar}
 
-      <main className={styles.main}>
+      <div className={styles.dashboardCard}>
         <PeerList peers={peers} myId={myId} onSendFile={sendFile} />
         {transfers.length > 0 && (
           <TransferList
@@ -235,7 +231,9 @@ export default function App() {
             onClear={clearTransfer}
           />
         )}
-      </main>
+      </div>
+
+      <button onClick={handleLeave} className={styles.btnLeaveFixed}>Leave</button>
     </div>
   )
 }
