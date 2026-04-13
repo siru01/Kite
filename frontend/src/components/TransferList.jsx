@@ -122,12 +122,6 @@ export default function TransferList({ transfers, onCancel, onClear }) {
 
               {/* Actions */}
               <div className={styles.actions}>
-                {/* Preview */}
-                {t.done && !t.cancelled && t.blob && getPreviewType(t.mimeType, t.name) && (
-                  <button className={styles.btnPreview} onClick={() => setPreviewFile(t)}>
-                    preview
-                  </button>
-                )}
 
                 {/* Save file — only for received */}
                 {t.done && !t.cancelled && t.direction === 'receive' && t.blob && (

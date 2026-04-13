@@ -37,8 +37,8 @@
 
 /* Inner bordered square — column: avatar on top, action text below */
 .cardInner {
-  width: 150px;
-  height: 130px;
+  width: 170px;
+  height: 155px;
   border: 3px solid #1a1a1a;
   border-radius: 10px;
   background: #ece4daa2;
@@ -65,12 +65,12 @@
 
 /* Avatar inside the peer card */
 .peerAvatar {
-  width: 56px !important;
-  height: 56px !important;
-  min-width: 56px;
-  min-height: 56px;
-  max-width: 56px;
-  max-height: 56px;
+  width: 72px !important;
+  height: 72px !important;
+  min-width: 72px;
+  min-height: 72px;
+  max-width: 72px;
+  max-height: 72px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #1a1a1a;
@@ -228,15 +228,15 @@
   }
 
   .cardInner {
-    width: 80px;
-    height: 70px;
+    width: 90px;
+    height: 100px;
     padding: 4px;
     gap: 3px;
   }
 
   .peerAvatar {
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
   }
 
   .peerAction {
