@@ -28,7 +28,7 @@ function getMimeType(mimeType, name) {
   return map[ext] || 'application/octet-stream'
 }
 
-export function useKite(myName) {
+export function useKite(myName, myAvatar) {
   const [myId, setMyId] = useState(null)
   const [peers, setPeers] = useState([])
   const [status, setStatus] = useState('disconnected')
@@ -297,12 +297,12 @@ export function useKite(myName) {
 
   // ── Signaling WebSocket ───────────────────────────────────────────────────
 
-  const connectWS = useCallback((name) => {
+  const connectWS = useCallback((name, avatar) => {
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
     setStatus('connecting')
 
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'join', name }))
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'join', name, avatar }))
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
@@ -323,7 +323,7 @@ export function useKite(myName) {
       setStatus('disconnected')
       setMyId(null)
       setPeers([])
-      setTimeout(() => connectWS(name), 3000)
+      setTimeout(() => connectWS(name, avatar), 3000)
     }
 
     ws.onerror = () => ws.close()
@@ -332,12 +332,12 @@ export function useKite(myName) {
   // ── Mount ─────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (myName) connectWS(myName)
+    if (myName) connectWS(myName, myAvatar)
     return () => {
       wsRef.current?.close()
       Object.values(peerConns.current).forEach(({ pc }) => pc?.close())
     }
-  }, [myName])
+  }, [myName, myAvatar])
 
   // Filter self out using the ref — never stale, never a timing race
   const otherPeers = peers.filter(p => p.id !== myIdRef.current)

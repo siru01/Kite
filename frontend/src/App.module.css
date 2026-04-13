@@ -205,18 +205,25 @@
   overflow: hidden;
 }
 
-/* Dashboard header: logo left, pill center, name+leave right */
+/* Dashboard header: logo left, pill center, name+leave right
+   Now starts from left:0 to match join screen logo position */
 .dashboardHeader {
   position: fixed;
   top: 0;
-  left: 100px;
-  right: 100px;
+  left: 0;
+  right: 0;
   height: 70px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  padding: 0px 32px;
+  padding: 0 40px;
   z-index: 1000;
+}
+
+/* Center section — absorbs remaining space, centers the pill */
+.headerCenter {
+  flex: 1;
+  display: flex;
+  justify-content: center;
 }
 
 /* Right side: name badge + leave button */
@@ -224,7 +231,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  justify-self: end;
+  flex-shrink: 0;
 }
 
 .nameBadge {
@@ -274,11 +281,15 @@
   font-family: 'Nova Square', sans-serif;
   letter-spacing: 1.5px;
   color: #08060d;
-  justify-self: center;
   white-space: nowrap;
 }
 
-/* Large rounded dashboard card — no page-level scroll */
+/* Mobile info bar — hidden on desktop, visible on mobile */
+.mobileInfoBar {
+  display: none;
+}
+
+/* Large rounded dashboard card — with shadow like join card */
 .dashboardCard {
   position: fixed;
   top: 70px;
@@ -287,22 +298,33 @@
   bottom: 20px;
   background: #ece4da;
   border: 2px solid #1a1a1a;
-  border-radius: 40px 40px 40px 40px;
-  overflow: hidden; /* card itself does NOT scroll */
+  border-radius: 40px;
+  overflow: hidden;
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   padding-bottom: 10px;
+  box-shadow: 6px 6px 0px #1a1a1a;
 }
 
-/* PeerList section — always visible at the top, never scrolls */
+/* Desktop: peers on left, transfers on right (side by side) */
+.dashboardContent {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+/* PeerList section — narrow left column on desktop */
 .peerSection {
   flex-shrink: 0;
+  overflow-y: auto;
 }
 
-/* Transfer list section — takes remaining space, scrolls independently */
+/* Transfer list section — fills remaining space, scrolls independently */
 .transferSection {
   flex: 1;
   min-height: 0;
@@ -354,8 +376,8 @@
 }
 
 .btnLeave:hover {
-  color: #f87171;
-  border-color: #f87171;
+  color: #ff0000;
+  border-color: #ff0000;
 }
 
 .tagline {
@@ -434,43 +456,67 @@
     letter-spacing: 4px;
   }
 
-  /* Dashboard header */
+  /* Dashboard header — only logo + leave on mobile */
   .dashboardHeader {
-    left: 0;
-    right: 0;
     height: 60px;
-    padding: 0 12px;
-    grid-template-columns: auto 1fr auto;
-    gap: 8px;
+    padding: 0 16px;
   }
 
-  .statusPillCenter {
+  /* Hide status pill and name from header on mobile */
+  .headerCenter {
+    display: none;
+  }
+  .headerActions .nameBadge {
+    display: none;
+  }
+
+  /* Push leave to the right */
+  .headerActions {
+    margin-left: auto;
+  }
+
+  /* Show mobile info bar inside the card */
+  .mobileInfoBar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 16px 0;
+  }
+
+  .mobileInfoBar .nameBadge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 4px 14px;
+    background: rgba(8, 6, 13, 0.12);
+    color: #08060d;
+  }
+
+  .mobileInfoBar .statusPillCenter {
     font-size: 11px;
-    padding: 6px 12px;
+    padding: 6px 14px;
     gap: 8px;
     letter-spacing: 0.5px;
   }
 
-  .headerActions {
-    gap: 8px;
-  }
-
-  .nameBadge {
-    font-size: 12px;
-    padding: 4px 12px;
-  }
-
-  .btnLeaveHeader {
-    font-size: 12px;
-    padding: 4px 14px;
-  }
-
-  /* Dashboard card */
+  /* Dashboard card — spacing from sides and bottom */
   .dashboardCard {
     top: 68px;
-    left: 0;
-    right: 0;
-    border-radius: 24px 24px 0 0;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    border-radius: 24px;
+    box-shadow: 4px 4px 0px #1a1a1a;
+  }
+
+  /* Stack vertically on mobile */
+  .dashboardContent {
+    flex-direction: column;
+  }
+
+  .peerSection {
+    flex-shrink: 0;
+    overflow-y: visible;
   }
 
   .tagline {
@@ -540,20 +586,18 @@
 
   .dashboardHeader {
     height: 50px;
-    padding: 0px 8px;
-    gap: 10px;
+    padding: 0px 12px;
   }
 
-  .statusPillCenter {
+  .mobileInfoBar .statusPillCenter {
     font-size: 10px;
-    padding: 4px 8px;
-    gap: 10px;
-    letter-spacing: 0;
+    padding: 4px 10px;
+    gap: 8px;
   }
 
-  .nameBadge {
+  .mobileInfoBar .nameBadge {
     font-size: 10px;
-    padding: 3px 8px;
+    padding: 3px 10px;
   }
 
   .btnLeaveHeader {
@@ -562,8 +606,12 @@
   }
 
   .dashboardCard {
-    top: 80px;
-    border-radius: 18px 18px 18px 18px;
+    top: 58px;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    border-radius: 18px;
+    box-shadow: 3px 3px 0px #1a1a1a;
   }
 
   .tagline {

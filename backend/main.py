@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Structure: { ip: { "ws": websocket_object, "name": string, "id": string } }
+# Structure: { ip: { "ws": websocket_object, "name": string, "id": string, "avatar": string } }
 active_peers: Dict[str, Dict[str, Any]] = {}
 
 @app.websocket("/ws")
@@ -30,6 +30,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if msg.get("type") == "join":
                 name = msg.get("name", "Unknown Device")
+                avatar = msg.get("avatar", "a1")
 
                 # ← Reuse existing ID if same IP rejoins (refresh, new tab, etc.)
                 existing = active_peers.get(device_ip)
@@ -38,7 +39,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 active_peers[device_ip] = {
                     "ws": websocket,
                     "name": name,
-                    "id": peer_id
+                    "id": peer_id,
+                    "avatar": avatar
                 }
 
                 await websocket.send_json({
@@ -70,7 +72,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 async def broadcast_peers():
-    peer_list = [{"id": info["id"], "name": info["name"]} for info in active_peers.values()]
+    peer_list = [{"id": info["id"], "name": info["name"], "avatar": info.get("avatar", "a1")} for info in active_peers.values()]
 
     for info in active_peers.values():
         try:

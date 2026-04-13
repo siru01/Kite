@@ -63,6 +63,12 @@ export default function PeerList({ peers, myId, onSendFile }) {
             title="Click to send a file, or drag & drop"
           >
             <div className={styles.cardInner}>
+              <img
+                src={`/${peer.avatar || 'a1'}.jpg`}
+                alt={peer.name}
+                className={styles.peerAvatar}
+                style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover' }}
+              />
               <span className={styles.peerAction}>
                 {draggingOver === peer.id ? 'drop to send' : 'click or drop files'}
               </span>

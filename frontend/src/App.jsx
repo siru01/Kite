@@ -46,7 +46,7 @@ export default function App() {
     return () => ch.close()
   }, [])
 
-  const { myId, peers, status, transfers, sendFile, cancelTransfer, clearTransfer } = useKite(joinedAs)
+  const { myId, peers, status, transfers, sendFile, cancelTransfer, clearTransfer } = useKite(joinedAs, selectedAvatar)
 
   const handleJoin = (e) => {
     e.preventDefault()
@@ -97,9 +97,11 @@ export default function App() {
   const dashboardNavbar = (
     <header className={styles.dashboardHeader}>
       <span className={styles.logo}>KITE</span>
-      <div className={styles.statusPillCenter} data-status={status}>
-        <span className={styles.dot} />
-        {status === 'connected' ? `${peers.length} peers nearby` : status}
+      <div className={styles.headerCenter}>
+        <div className={styles.statusPillCenter} data-status={status}>
+          <span className={styles.dot} />
+          {status === 'connected' ? `${peers.length} peers nearby` : status}
+        </div>
       </div>
       <div className={styles.headerActions}>
         <span className={styles.nameBadge}>{joinedAs}</span>
@@ -195,18 +197,29 @@ export default function App() {
       {dashboardNavbar}
 
       <div className={styles.dashboardCard}>
-        <div className={styles.peerSection}>
-          <PeerList peers={peers} myId={myId} onSendFile={sendFile} />
-        </div>
-        {transfers.length > 0 && (
-          <div className={styles.transferSection}>
-            <TransferList
-              transfers={transfers}
-              onCancel={cancelTransfer}
-              onClear={clearTransfer}
-            />
+        {/* Mobile-only info bar: status pill + name */}
+        <div className={styles.mobileInfoBar}>
+          <div className={styles.statusPillCenter} data-status={status}>
+            <span className={styles.dot} />
+            {status === 'connected' ? `${peers.length} peers nearby` : status}
           </div>
-        )}
+          <span className={styles.nameBadge}>{joinedAs}</span>
+        </div>
+
+        <div className={styles.dashboardContent}>
+          <div className={styles.peerSection}>
+            <PeerList peers={peers} myId={myId} onSendFile={sendFile} />
+          </div>
+          {transfers.length > 0 && (
+            <div className={styles.transferSection}>
+              <TransferList
+                transfers={transfers}
+                onCancel={cancelTransfer}
+                onClear={clearTransfer}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
