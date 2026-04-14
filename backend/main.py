@@ -4,14 +4,45 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 app = FastAPI()
+
+allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Content Security Policy (CSP)
+    # Allows self, and WebRTC/WS connections to common STUN servers
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self' ws: wss: stun:stun.l.google.com:19302 stun:stun1.l.google.com:19302; "
+        "frame-ancestors 'none';"
+    )
+    
+    response.headers["Content-Security-Policy"] = csp
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    return response
 
 # Structure: { ip: { "ws": websocket_object, "name": string, "id": string, "avatar": string } }
 active_peers: Dict[str, Dict[str, Any]] = {}

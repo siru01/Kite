@@ -9,7 +9,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 const CHUNK_SIZE = 64 * 1024 // 64 KB chunks
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const WS_URL = `${WS_PROTOCOL}//${window.location.hostname}:8000/ws`
+// Recommended to use VITE_WS_URL env var for production
+const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTOCOL}//${window.location.hostname}:8000/ws`
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },

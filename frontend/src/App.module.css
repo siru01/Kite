@@ -113,8 +113,8 @@
 }
 
 .avatarPreview {
-  width: 110px;
-  height: 130px;
+  width: 130px;
+  height: 150px;
   border: 3px solid #1a1a1a;
   background: #ffffff;
   display: flex;
@@ -152,10 +152,11 @@
 }
 
 .joinForm input {
+  font-size: 15px;
   width: 50%;
   margin-left:90px;
   text-align: center;
-  padding: 12px;
+  padding: 14px;
   border: 2px solid #1a1a1a;
   background: #ffffff;
   color: #08060d;
@@ -175,14 +176,14 @@
   cursor: pointer;
   transition: all 0.2s;
   width: 50%;
-  margin-left:100px;
+  margin-left:105px;
 }
 
 
 .btnPrimary:hover:not(:disabled) {
   background: #08060d;
   color: #e8e5e0;
-  margin-left:100px;
+  margin-left:105x;
   width: 50%;
   font-family: 'Nova Square', sans-serif;;
   
@@ -193,7 +194,7 @@
   cursor: not-allowed;
   width: 50%;
   font-family: 'Nova Square', sans-serif;
-  margin-left:100px;
+  margin-left:105px;
   }
 
 /* ── Dashboard (Main App) ────────────────────────────────────────────────── */
@@ -320,10 +321,13 @@
   align-items: stretch;
 }
 
-/* PeerList section — narrow left column on desktop */
+/* PeerList section — narrow left column on desktop, but full-width if no peers */
 .peerSection {
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Transfer list section — fills remaining space, scrolls independently */
@@ -517,7 +521,7 @@
   }
 
   .peerSection {
-    flex-shrink: 0;
+    flex: 0 0 auto;
     overflow-y: visible;
   }
 
