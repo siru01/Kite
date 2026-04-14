@@ -46,7 +46,7 @@ export default function App() {
     return () => ch.close()
   }, [])
 
-  const { myId, peers, status, transfers, sendFile, cancelTransfer, clearTransfer } = useKite(joinedAs, selectedAvatar)
+  const { myId, localIp, peers, status, transfers, sendFile, cancelTransfer, clearTransfer } = useKite(joinedAs, selectedAvatar)
 
   const handleJoin = (e) => {
     e.preventDefault()
@@ -208,7 +208,7 @@ export default function App() {
 
         <div className={styles.dashboardContent}>
           <div className={styles.peerSection}>
-            <PeerList peers={peers} myId={myId} onSendFile={sendFile} />
+            <PeerList peers={peers} myId={myId} localIp={localIp} onSendFile={sendFile} />
           </div>
           {transfers.length > 0 && (
             <div className={styles.transferSection}>

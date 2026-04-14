@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import styles from './PeerList.module.css'
 
-export default function PeerList({ peers, myId, onSendFile }) {
+export default function PeerList({ peers, myId, localIp, onSendFile }) {
   const fileInputRef = useRef(null)
   const targetPeerRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(null)
@@ -44,6 +44,13 @@ export default function PeerList({ peers, myId, onSendFile }) {
         </div>
         <p className={styles.emptyTitle}>Waiting for devices...</p>
         <p className={styles.emptyHint}>Open Kite on another device on the same Wi-Fi and it will appear here automatically.</p>
+        
+        {localIp && (
+          <div className={styles.localLinkContainer}>
+            <p className={styles.localLinkText}>go this link in your browser to connect</p>
+            <p className={styles.localLinkUrl}>http://{localIp}:5173/</p>
+          </div>
+        )}
       </div>
     )
   }

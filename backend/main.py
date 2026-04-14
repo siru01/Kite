@@ -1,5 +1,6 @@
 import uuid
 import json
+import socket
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
@@ -47,6 +48,16 @@ async def add_security_headers(request: Request, call_next):
 # Structure: { ip: { "ws": websocket_object, "name": string, "id": string, "avatar": string } }
 active_peers: Dict[str, Dict[str, Any]] = {}
 
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -76,7 +87,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 await websocket.send_json({
                     "type": "welcome",
-                    "id": peer_id
+                    "id": peer_id,
+                    "local_ip": get_local_ip()
                 })
 
                 await broadcast_peers()

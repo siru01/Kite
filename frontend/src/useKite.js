@@ -31,6 +31,7 @@ function getMimeType(mimeType, name) {
 
 export function useKite(myName, myAvatar) {
   const [myId, setMyId] = useState(null)
+  const [localIp, setLocalIp] = useState(null)
   const [peers, setPeers] = useState([])
   const [status, setStatus] = useState('disconnected')
   const [transfers, setTransfers] = useState([])
@@ -311,6 +312,7 @@ export function useKite(myName, myAvatar) {
         case 'welcome':
           myIdRef.current = msg.id   // set ref synchronously — always current
           setMyId(msg.id)
+          if (msg.local_ip) setLocalIp(msg.local_ip)
           setStatus('connected')
           break
         case 'peer_list': setPeers(msg.peers); break
@@ -343,7 +345,7 @@ export function useKite(myName, myAvatar) {
   // Filter self out using the ref — never stale, never a timing race
   const otherPeers = peers.filter(p => p.id !== myIdRef.current)
 
-  return { myId, peers: otherPeers, status, transfers, sendFile, cancelTransfer, clearTransfer }
+  return { myId, localIp, peers: otherPeers, status, transfers, sendFile, cancelTransfer, clearTransfer }
 }
 
 /* so all chnages aed to the file */
