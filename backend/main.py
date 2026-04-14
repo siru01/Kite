@@ -3,6 +3,8 @@ import json
 import socket
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from typing import Dict, Any
 
 import os
@@ -58,12 +60,18 @@ def get_local_ip():
     except Exception:
         return "127.0.0.1"
 
+# Helper to get client IP (respecting proxy headers)
+def get_client_ip(request: Request | WebSocket):
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        # Get the first IP in the list (original client)
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-
-    # ← Use IP as the unique device identity
-    device_ip = websocket.client.host
+    device_ip = get_client_ip(websocket)
 
     try:
         while True:
@@ -74,7 +82,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 name = msg.get("name", "Unknown Device")
                 avatar = msg.get("avatar", "a1")
 
-                # ← Reuse existing ID if same IP rejoins (refresh, new tab, etc.)
                 existing = active_peers.get(device_ip)
                 peer_id = existing["id"] if existing else str(uuid.uuid4())
 
@@ -88,14 +95,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({
                     "type": "welcome",
                     "id": peer_id,
-                    "local_ip": get_local_ip()
+                    "local_ip": get_local_ip() # Keep for local testing, fallback is public IP detection
                 })
 
                 await broadcast_peers()
 
             elif msg.get("type") in ("offer", "answer", "ice-candidate"):
                 target_id = msg.get("target")
-                # find target by id
                 target = next((info for info in active_peers.values() if info["id"] == target_id), None)
                 if target:
                     sender_id = active_peers[device_ip]["id"]
@@ -113,17 +119,41 @@ async def websocket_endpoint(websocket: WebSocket):
             del active_peers[device_ip]
             await broadcast_peers()
 
+@app.get("/me")
+async def get_my_ip(request: Request):
+    return {"ip": get_client_ip(request)}
+
+# ── Serve Frontend ─────────────────────────────────────────────────────────
+
+# Mount the 'dist' folder from the frontend build
+# This assumes the Dockerfile builds the frontend into 'static' directory
+# or we point to the absolute path in the container.
+frontend_path = os.path.join(os.getcwd(), "static")
+
+if os.path.exists(frontend_path):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+
+    @app.get("/{rest_of_path:path}")
+    async def serve_frontend(rest_of_path: str):
+        # Serve index.html for any route not starting with /ws or /me
+        # to support React SPA routing
+        if rest_of_path.startswith("ws") or rest_of_path == "me":
+            return None # Should be handled by handlers above
+        
+        index_file = os.path.join(frontend_path, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"error": "Frontend build not found"}
 
 async def broadcast_peers():
     peer_list = [{"id": info["id"], "name": info["name"], "avatar": info.get("avatar", "a1")} for info in active_peers.values()]
-
     for info in active_peers.values():
         try:
             await info["ws"].send_json({"type": "peer_list", "peers": peer_list})
         except Exception:
             pass
 
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

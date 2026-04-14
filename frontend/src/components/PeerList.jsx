@@ -48,7 +48,11 @@ export default function PeerList({ peers, myId, localIp, onSendFile }) {
         {localIp && (
           <div className={styles.localLinkContainer}>
             <p className={styles.localLinkText}>go this link in your browser to connect</p>
-            <p className={styles.localLinkUrl}>http://{localIp}:5173/</p>
+            <p className={styles.localLinkUrl}>
+              {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                ? `http://${localIp}:5173/` 
+                : window.location.origin}
+            </p>
           </div>
         )}
       </div>
