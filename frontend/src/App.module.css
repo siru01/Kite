@@ -224,6 +224,8 @@
   flex: 1;
   display: flex;
   justify-content: center;
+  /* pading padding-left: 550px; */
+  
 }
 
 /* Right side: name badge + leave button */
@@ -231,7 +233,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-shrink: 0;
+  flex-shrink: 1;
 }
 
 .nameBadge {

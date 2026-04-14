@@ -109,6 +109,7 @@
   align-items: center;
   justify-content: center;
   text-align: center;
+  padding-left: 375px;
   gap: 16px;
 }
 
