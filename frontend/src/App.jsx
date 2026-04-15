@@ -4,6 +4,9 @@ import PeerList from './components/PeerList'
 import TransferList from './components/TransferList'
 import styles from './App.module.css'
 
+//for analytical 
+import { Analytics } from '@vercel/analytics/react';
+
 // Unique ID for this tab instance
 const TAB_ID = Math.random().toString(36).slice(2)
 
@@ -113,114 +116,123 @@ export default function App() {
   // ── Tab already open in another window ───────────────────────────────────
   if (tabBlocked) {
     return (
-      <div className={styles.joinScreen}>
-        <div className={styles.joinBg} />
-        {navbar}
-        <div className={styles.joinCard}>
-          <p className={styles.tagline}>Already open in another tab</p>
-          <p className={styles.hint}>
-            Kite is already running in another tab. Switch back to it,
-            or use this tab instead.
-          </p>
-          <div className={styles.joinForm} style={{ marginTop: '2rem' }}>
-            <button className={styles.btnPrimary} onClick={handleTakeover}>
-              Use This Tab
-            </button>
+      <>
+        <Analytics />
+        <div className={styles.joinScreen}>
+          <div className={styles.joinBg} />
+          {navbar}
+          <div className={styles.joinCard}>
+            <p className={styles.tagline}>Already open in another tab</p>
+            <p className={styles.hint}>
+              Kite is already running in another tab. Switch back to it,
+              or use this tab instead.
+            </p>
+            <div className={styles.joinForm} style={{ marginTop: '2rem' }}>
+              <button className={styles.btnPrimary} onClick={handleTakeover}>
+                Use This Tab
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
   // ── Join screen ───────────────────────────────────────────────────────────
   if (!joinedAs) {
     return (
-      <div className={styles.joinScreen}>
-        <div className={styles.joinBg} />
-        {navbar}
+      <>
+        <Analytics />
+        <div className={styles.joinScreen}>
+          <div className={styles.joinBg} />
+          {navbar}
 
-        <div className={styles.joinHeadline}>
-          <p className={styles.headlineSub}>Send files</p>
-          <p className={styles.headlineMain}>FREE &amp; SECURE</p>
-        </div>
-
-        <div className={styles.joinCard}>
-          {/* Avatar interaction - Scrolling Gallery style */}
-          <div className={styles.avatarSection}>
-            <div 
-              className={styles.avatarPreview}
-              onClick={handlePreviewClick}
-              title="Double tap to change"
-            >
-              <div 
-                className={styles.avatarGalleryTrack}
-                style={{ transform: `translateX(-${AVATARS.indexOf(selectedAvatar) * 100}%)` }}
-              >
-                {AVATARS.map((av) => (
-                  <img
-                    key={av}
-                    src={`/${av}.jpg`}
-                    alt={av}
-                    className={styles.avatarGalleryImg}
-                  />
-                ))}
-              </div>
-            </div>
+          <div className={styles.joinHeadline}>
+            <p className={styles.headlineSub}>Send files</p>
+            <p className={styles.headlineMain}>FREE &amp; SECURE</p>
           </div>
 
-          <form onSubmit={handleJoin} className={styles.joinForm}>
-            <input
-              type="text"
-              placeholder="Choose your name"
-              value={inputName}
-              onChange={e => setInputName(e.target.value)}
-              maxLength={32}
-              autoFocus
-            />
-            <button
-              type="submit"
-              className={styles.btnPrimary}
-              disabled={!inputName.trim()}
-            >
-              JOIN
-            </button>
-          </form>
+          <div className={styles.joinCard}>
+            {/* Avatar interaction - Scrolling Gallery style */}
+            <div className={styles.avatarSection}>
+              <div 
+                className={styles.avatarPreview}
+                onClick={handlePreviewClick}
+                title="Double tap to change"
+              >
+                <div 
+                  className={styles.avatarGalleryTrack}
+                  style={{ transform: `translateX(-${AVATARS.indexOf(selectedAvatar) * 100}%)` }}
+                >
+                  {AVATARS.map((av) => (
+                    <img
+                      key={av}
+                      src={`/${av}.jpg`}
+                      alt={av}
+                      className={styles.avatarGalleryImg}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleJoin} className={styles.joinForm}>
+              <input
+                type="text"
+                placeholder="Choose your name"
+                value={inputName}
+                onChange={e => setInputName(e.target.value)}
+                maxLength={32}
+                autoFocus
+              />
+              <button
+                type="submit"
+                className={styles.btnPrimary}
+                disabled={!inputName.trim()}
+              >
+                JOIN
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
   // ── Main Dashboard ────────────────────────────────────────────────────────
   return (
-    <div className={styles.app}>
-      <div className={styles.joinBg} />
-      {dashboardNavbar}
+    <>
+      <Analytics />
+      <div className={styles.app}>
+        <div className={styles.joinBg} />
+        {dashboardNavbar}
 
-      <div className={styles.dashboardCard}>
-        {/* Mobile-only info bar: status pill + name */}
-        <div className={styles.mobileInfoBar}>
-          <div className={styles.statusPillCenter} data-status={status}>
-            <span className={styles.dot} />
-            {status === 'connected' ? `${peers.length} peers nearby` : status}
-          </div>
-          <span className={styles.nameBadge}>{joinedAs}</span>
-        </div>
-
-        <div className={styles.dashboardContent}>
-          <div className={styles.peerSection}>
-            <PeerList peers={peers} myId={myId} localIp={localIp} onSendFile={sendFile} />
-          </div>
-          {transfers.length > 0 && (
-            <div className={styles.transferSection}>
-              <TransferList
-                transfers={transfers}
-                onCancel={cancelTransfer}
-                onClear={clearTransfer}
-              />
+        <div className={styles.dashboardCard}>
+          {/* Mobile-only info bar: status pill + name */}
+          <div className={styles.mobileInfoBar}>
+            <div className={styles.statusPillCenter} data-status={status}>
+              <span className={styles.dot} />
+              {status === 'connected' ? `${peers.length} peers nearby` : status}
             </div>
-          )}
+            <span className={styles.nameBadge}>{joinedAs}</span>
+          </div>
+
+          <div className={styles.dashboardContent}>
+            <div className={styles.peerSection}>
+              <PeerList peers={peers} myId={myId} localIp={localIp} onSendFile={sendFile} />
+            </div>
+            {transfers.length > 0 && (
+              <div className={styles.transferSection}>
+                <TransferList
+                  transfers={transfers}
+                  onCancel={cancelTransfer}
+                  onClear={clearTransfer}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
