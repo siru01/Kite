@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import styles from './PeerList.module.css'
 
-export default function PeerList({ peers, myId, localIp, onSendFile }) {
-  const fileInputRef = useRef(null)
+export default function PeerList({ peers, myId, localIp, serverPort, onSendFile }) {
+  const fileInputRef  = useRef(null)
   const targetPeerRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(null)
 
@@ -23,9 +23,39 @@ export default function PeerList({ peers, myId, localIp, onSendFile }) {
   const handleDrop = (e, peer) => {
     e.preventDefault()
     setDraggingOver(null)
-    const files = Array.from(e.dataTransfer.files)
-    files.forEach(f => onSendFile(peer.id, f))
+    Array.from(e.dataTransfer.files).forEach(f => onSendFile(peer.id, f))
   }
+
+  /**
+   * Build the connection URL to show to the user.
+   *
+   * Rules:
+   *  - In production (not localhost), the server and frontend are on the same
+   *    host so window.location.origin is always correct — show that.
+   *  - In local dev, the frontend is on Vite (:5173) but the *backend* is on
+   *    a different port. Other devices on the LAN need to hit the *backend*
+   *    port directly (or through a proxy). We show the server's LAN IP + port.
+   */
+  const connectUrl = (() => {
+    const isLocalDev =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1'
+
+    if (!isLocalDev) {
+      // Production — same-origin deployment
+      return window.location.origin
+    }
+
+    if (localIp && serverPort) {
+      return `http://${localIp}:${serverPort}`
+    }
+
+    if (localIp) {
+      return `http://${localIp}:8000`
+    }
+
+    return null
+  })()
 
   if (peers.length === 0) {
     return (
@@ -43,16 +73,14 @@ export default function PeerList({ peers, myId, localIp, onSendFile }) {
           </svg>
         </div>
         <p className={styles.emptyTitle}>Waiting for devices...</p>
-        <p className={styles.emptyHint}>Open Kite on another device on the same Wi-Fi and it will appear here automatically.</p>
-        
-        {localIp && (
+        <p className={styles.emptyHint}>
+          Open Kite on another device on the same Wi-Fi and it will appear here automatically.
+        </p>
+
+        {connectUrl && (
           <div className={styles.localLinkContainer}>
-            <p className={styles.localLinkText}>go this link in your browser to connect</p>
-            <p className={styles.localLinkUrl}>
-              {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-                ? `http://${localIp}:5173/` 
-                : window.location.origin}
-            </p>
+            <p className={styles.localLinkText}>go to this link in your browser to connect</p>
+            <p className={styles.localLinkUrl}>{connectUrl}</p>
           </div>
         )}
       </div>
