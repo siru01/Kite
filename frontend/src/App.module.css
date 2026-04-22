@@ -15,11 +15,11 @@
 .joinBg {
   position: fixed;
   inset: 0;
-  background: url('/background1.png') no-repeat center center;
+  background: url('/background.gif') no-repeat center center;
   background-size: cover;
   z-index: 0;
 }
-
+ 
 /* ── Navbar (Shared Header) ──────────────────────────────────────────────── */
 
 .header {
