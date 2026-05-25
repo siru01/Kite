@@ -12,10 +12,20 @@ const CHUNK_SIZE = 64 * 1024 // 64 KB
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTOCOL}//${window.location.host}/ws`
 
-const ICE_SERVERS = [
+let defaultIceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
+
+if (import.meta.env && import.meta.env.VITE_ICE_SERVERS) {
+  try {
+    defaultIceServers = JSON.parse(import.meta.env.VITE_ICE_SERVERS)
+  } catch (e) {
+    console.error('Failed to parse VITE_ICE_SERVERS:', e)
+  }
+}
+
+const ICE_SERVERS = defaultIceServers
 
 // Backoff config
 const BACKOFF_BASE    = 1000
@@ -84,6 +94,7 @@ export function useKite(myName, myAvatar) {
   const backoffRef     = useRef(BACKOFF_BASE)
   const reconnTimerRef = useRef(null)
   const unmountedRef   = useRef(false)
+  const iceServersRef  = useRef(ICE_SERVERS)
 
   // ── Transfer helpers ──────────────────────────────────────────────────────
 
@@ -203,7 +214,7 @@ export function useKite(myName, myAvatar) {
       try { existing.pc.close() } catch (_) {}
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
     pc.onicecandidate = (e) => {
       if (e.candidate) wsSend({ type: 'ice-candidate', target: peerId, candidate: e.candidate })
@@ -415,6 +426,9 @@ export function useKite(myName, myAvatar) {
           setMyId(msg.id)
           if (msg.local_ip)  setLocalIp(msg.local_ip)
           if (msg.port)      setServerPort(msg.port)
+          if (msg.ice_servers) {
+            iceServersRef.current = msg.ice_servers
+          }
           setStatus('connected')
           break
 

@@ -3,6 +3,10 @@ import json
 import socket
 import asyncio
 import platform
+import hmac
+import hashlib
+import base64
+import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -34,7 +38,7 @@ async def add_security_headers(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
-        "connect-src 'self' ws: wss: stun:stun.l.google.com:19302 stun:stun1.l.google.com:19302; "
+        "connect-src 'self' ws: wss: stun:stun.l.google.com:19302 stun:stun1.l.google.com:19302 turn: turns: *.metered.ca; "
         "frame-ancestors 'none';"
     )
     response.headers["Content-Security-Policy"] = csp
@@ -64,6 +68,57 @@ def get_local_ip() -> str:
 
 def get_server_port() -> int:
     return int(os.getenv("PORT", 8000))
+
+def get_turn_credentials(username: str, secret: str, ttl: int = 86400):
+    """Generate temporary TURN credentials using the TURN REST API authentication protocol."""
+    unix_timestamp = int(time.time()) + ttl
+    temp_username = f"{unix_timestamp}:{username}"
+    
+    # Create HMAC-SHA1 signature using the secret as the key
+    digest = hmac.new(
+        secret.encode("utf-8"),
+        temp_username.encode("utf-8"),
+        hashlib.sha1
+    ).digest()
+    
+    temp_password = base64.b64encode(digest).decode("utf-8")
+    return temp_username, temp_password
+
+def get_ice_servers():
+    """Get the list of ICE servers (STUN & TURN) to send to clients."""
+    # 1. Check if a complete ICE server config is provided in environment variables
+    env_ice_servers = os.getenv("ICE_SERVERS")
+    if env_ice_servers:
+        try:
+            return json.loads(env_ice_servers)
+        except Exception as e:
+            print(f"Error parsing ICE_SERVERS env variable: {e}")
+            
+    # 2. Check if a custom TURN server configuration is provided via individual env vars
+    turn_secret = os.getenv("TURN_SECRET", "openrelayprojectsecret")
+    turn_username = os.getenv("TURN_USERNAME", "kite-user")
+    
+    # Comma-separated list of URLs
+    default_urls = (
+        "turn:staticauth.openrelay.metered.ca:80,"
+        "turn:staticauth.openrelay.metered.ca:443,"
+        "turns:staticauth.openrelay.metered.ca:443?transport=tcp"
+    )
+    turn_urls_str = os.getenv("TURN_URLS", default_urls)
+    turn_urls = [url.strip() for url in turn_urls_str.split(",") if url.strip()]
+    
+    # Generate dynamic credentials
+    username, password = get_turn_credentials(turn_username, turn_secret)
+    
+    return [
+        { "urls": "stun:stun.l.google.com:19302" },
+        { "urls": "stun:stun1.l.google.com:19302" },
+        {
+            "urls": turn_urls,
+            "username": username,
+            "credential": password
+        }
+    ]
 
 def get_client_ip(request: Request | WebSocket) -> str:
     forwarded = request.headers.get("x-forwarded-for")
@@ -167,6 +222,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     "local_ip":  local_ip,
                     "port":      server_port,
                     "hostname":  platform.node(),
+                    "ice_servers": get_ice_servers(),
                 })
 
                 await broadcast_peers()
@@ -210,6 +266,7 @@ async def get_my_info(request: Request):
         "local_ip": get_local_ip(),
         "port":     get_server_port(),
         "hostname": platform.node(),
+        "ice_servers": get_ice_servers(),
     }
 
 
