@@ -201,8 +201,22 @@ export function useKite(myName, myAvatar) {
       }
     }
 
-    dc.onerror = (e) => console.warn('[DC error]', peerId, e)
-    dc.onclose = () => { delete peerConns.current[peerId] }
+    dc.onerror = (e) => {
+      console.warn('[DC error]', peerId, e)
+      const inc = incomingRef.current[peerId]
+      if (inc) {
+        updateTransfer(inc.id, { done: true, cancelled: true, error: 'Data channel error' })
+        delete incomingRef.current[peerId]
+      }
+    }
+    dc.onclose = () => {
+      delete peerConns.current[peerId]
+      const inc = incomingRef.current[peerId]
+      if (inc) {
+        updateTransfer(inc.id, { done: true, cancelled: true, error: 'Connection closed' })
+        delete incomingRef.current[peerId]
+      }
+    }
   }, [addTransfer, updateTransfer])
 
   // ── Create RTCPeerConnection ───────────────────────────────────────────────
@@ -229,19 +243,36 @@ export function useKite(myName, myAvatar) {
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState
       if (state === 'failed' || state === 'closed') {
+        // Cancel active incoming transfer if peer connection fails
+        const inc = incomingRef.current[peerId]
+        if (inc) {
+          updateTransfer(inc.id, { done: true, cancelled: true, error: `Connection ${state}` })
+          delete incomingRef.current[peerId]
+        }
         delete peerConns.current[peerId]
       }
     }
 
-    peerConns.current[peerId] = { pc, dc: null }
+    peerConns.current[peerId] = { pc, dc: null, iceQueue: [] }
     return pc
-  }, [wsSend, setupDataChannel])
+  }, [wsSend, setupDataChannel, updateTransfer])
 
   // ── WebRTC signaling ──────────────────────────────────────────────────────
 
   const handleOffer = useCallback(async ({ from, offer }) => {
     const pc = createPc(from)
     await pc.setRemoteDescription(new RTCSessionDescription(offer))
+    
+    // Process queued candidates
+    const conn = peerConns.current[from]
+    if (conn?.iceQueue) {
+      for (const cand of conn.iceQueue) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(cand)) }
+        catch (e) { console.warn('[ICE queued]', e) }
+      }
+      conn.iceQueue = []
+    }
+
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
     wsSend({ type: 'answer', target: from, answer })
@@ -249,14 +280,34 @@ export function useKite(myName, myAvatar) {
 
   const handleAnswer = useCallback(async ({ from, answer }) => {
     const conn = peerConns.current[from]
-    if (conn?.pc) await conn.pc.setRemoteDescription(new RTCSessionDescription(answer))
+    if (conn?.pc) {
+      await conn.pc.setRemoteDescription(new RTCSessionDescription(answer))
+      
+      // Process queued candidates
+      if (conn.iceQueue) {
+        for (const cand of conn.iceQueue) {
+          try { await conn.pc.addIceCandidate(new RTCIceCandidate(cand)) }
+          catch (e) { console.warn('[ICE queued]', e) }
+        }
+        conn.iceQueue = []
+      }
+    }
   }, [])
 
   const handleIceCandidate = useCallback(async ({ from, candidate }) => {
     const conn = peerConns.current[from]
-    if (conn?.pc && candidate) {
-      try { await conn.pc.addIceCandidate(new RTCIceCandidate(candidate)) }
-      catch (e) { console.warn('[ICE]', e) }
+    if (!conn?.pc || !candidate) return
+
+    if (!conn.pc.remoteDescription) {
+      if (!conn.iceQueue) conn.iceQueue = []
+      conn.iceQueue.push(candidate)
+      return
+    }
+
+    try {
+      await conn.pc.addIceCandidate(new RTCIceCandidate(candidate))
+    } catch (e) {
+      console.warn('[ICE]', e)
     }
   }, [])
 
@@ -323,7 +374,7 @@ export function useKite(myName, myAvatar) {
           dc = await connectToPeer(targetPeerId)
         } catch (e) {
           console.error('[sendFile] could not open DC:', e)
-          updateTransfer(transferId, { done: true, cancelled: true })
+          updateTransfer(transferId, { done: true, cancelled: true, error: e.message || String(e) })
           return
         }
 
@@ -374,7 +425,7 @@ export function useKite(myName, myAvatar) {
 
       } catch (err) {
         console.error('[sendFile] error:', err)
-        updateTransfer(transferId, { done: true, cancelled: true })
+        updateTransfer(transferId, { done: true, cancelled: true, error: err.message || String(err) })
       }
     }).catch(err => console.warn('[sendFile] queue error:', err))
   }, [addTransfer, connectToPeer, updateTransfer])

@@ -154,7 +154,9 @@ export default function TransferList({ transfers, onCancel, onClear }) {
               <div className={styles.progressLabel}>{t.progress}%</div>
             )}
             {t.cancelled && (
-              <div className={styles.progressLabel}>Cancelled</div>
+              <div className={styles.progressLabel}>
+                Cancelled {t.error ? `(${t.error})` : ''}
+              </div>
             )}
           </div>
         ))}
