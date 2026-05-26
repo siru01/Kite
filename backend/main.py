@@ -113,7 +113,7 @@ def get_ice_servers():
 
     # 3. Add dynamic credentials (REST API) using TURN_SECRET if configured, otherwise fallback
     turn_secret = os.getenv("TURN_SECRET", "openrelayprojectsecret")
-    turn_username = os.getenv("TURN_USERNAME", "kite-user")
+    turn_username = os.getenv("TURN_USERNAME", "openrelayproject")
     
     default_urls = (
         "turn:staticauth.openrelay.metered.ca:80,"
