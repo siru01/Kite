@@ -329,10 +329,27 @@ export function useKite(myName, myAvatar) {
     wsSend({ type: 'offer', target: peerId, offer })
 
     await new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('Connection timed out')), 15000)
+      const t = setTimeout(() => {
+        const iceState = pc.iceConnectionState
+        reject(new Error(`Connection timed out (ICE state: ${iceState}). Check network/router.`))
+      }, 30000)
+
+      const cleanup = () => {
+        clearTimeout(t)
+        pc.oniceconnectionstatechange = null
+      }
+
+      pc.oniceconnectionstatechange = () => {
+        const state = pc.iceConnectionState
+        if (state === 'failed') {
+          cleanup()
+          reject(new Error('ICE connection failed — direct or relayed network path could not be established.'))
+        }
+      }
+
       const origOpen = dc.onopen
       dc.onopen = (e) => {
-        clearTimeout(t)
+        cleanup()
         if (origOpen) origOpen(e)
         resolve()
       }

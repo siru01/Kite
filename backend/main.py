@@ -94,29 +94,40 @@ def get_ice_servers():
         except Exception as e:
             print(f"Error parsing ICE_SERVERS env variable: {e}")
             
-    # 2. Check if a custom TURN server configuration is provided via individual env vars
-    turn_secret = os.getenv("TURN_SECRET", "openrelayprojectsecret")
-    turn_username = os.getenv("TURN_USERNAME", "kite-user")
-    
-    # Comma-separated list of URLs
-    default_urls = (
-        "turn:staticauth.openrelay.metered.ca:80,"
-        "turn:staticauth.openrelay.metered.ca:443,"
-        "turns:staticauth.openrelay.metered.ca:443?transport=tcp"
-    )
-    turn_urls_str = os.getenv("TURN_URLS", default_urls)
-    turn_urls = [url.strip() for url in turn_urls_str.split(",") if url.strip()]
-    
-    # Generate dynamic credentials
-    username, password = get_turn_credentials(turn_username, turn_secret)
-    
-    return [
+    base_stun = [
         { "urls": "stun:stun.l.google.com:19302" },
         { "urls": "stun:stun1.l.google.com:19302" },
+        { "urls": "stun:stun.cloudflare.com:3478" }
+    ]
+
+    # 2. Check if a custom TURN server configuration is provided via individual env vars
+    turn_secret = os.getenv("TURN_SECRET")
+    turn_urls_str = os.getenv("TURN_URLS")
+    
+    if turn_secret and turn_urls_str:
+        turn_username = os.getenv("TURN_USERNAME", "kite-user")
+        turn_urls = [url.strip() for url in turn_urls_str.split(",") if url.strip()]
+        # Generate dynamic credentials
+        username, password = get_turn_credentials(turn_username, turn_secret)
+        return base_stun + [
+            {
+                "urls": turn_urls,
+                "username": username,
+                "credential": password
+            }
+        ]
+    
+    # 3. Fallback: Use staticauth.openrelay.metered.ca with its static credentials.
+    # Generating dynamic (HMAC) credentials for this server will result in authentication failure.
+    return base_stun + [
         {
-            "urls": turn_urls,
-            "username": username,
-            "credential": password
+            "urls": [
+                "turn:staticauth.openrelay.metered.ca:80",
+                "turn:staticauth.openrelay.metered.ca:443",
+                "turns:staticauth.openrelay.metered.ca:443?transport=tcp"
+            ],
+            "username": "openrelayproject",
+            "credential": "openrelayprojectsecret"
         }
     ]
 
