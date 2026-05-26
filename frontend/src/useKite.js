@@ -229,20 +229,28 @@ export function useKite(myName, myAvatar) {
       try { existing.pc.close() } catch (_) {}
     }
 
+    console.log('[Kite] Creating RTCPeerConnection with ICE Servers:', iceServersRef.current)
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
     pc.onicecandidate = (e) => {
+      console.log('[Kite] Local ICE Candidate generated:', e.candidate)
       if (e.candidate) wsSend({ type: 'ice-candidate', target: peerId, candidate: e.candidate })
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('[Kite] ICE Connection State Change:', pc.iceConnectionState)
     }
 
     pc.ondatachannel = (e) => {
       const dc = e.channel
+      console.log('[Kite] Received data channel:', dc.label)
       if (peerConns.current[peerId]) peerConns.current[peerId].dc = dc
       setupDataChannel(dc, peerId)
     }
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState
+      console.log('[Kite] Connection State Change:', state)
       if (state === 'failed' || state === 'closed') {
         // Cancel active incoming transfer if peer connection fails
         const inc = incomingRef.current[peerId]
@@ -319,9 +327,10 @@ export function useKite(myName, myAvatar) {
     }
 
     try {
+      console.log('[Kite] Adding remote ICE Candidate from', from, ':', candidate)
       await conn.pc.addIceCandidate(new RTCIceCandidate(candidate))
     } catch (e) {
-      console.warn('[ICE]', e)
+      console.warn('[Kite] ICE Error adding candidate:', e)
     }
   }, [])
 
@@ -504,6 +513,7 @@ export function useKite(myName, myAvatar) {
       const msg = JSON.parse(e.data)
       switch (msg.type) {
         case 'welcome':
+          console.log('[Kite] Welcome message received. Configured ICE servers:', msg.ice_servers)
           myIdRef.current = msg.id
           setMyId(msg.id)
           if (msg.local_ip)  setLocalIp(msg.local_ip)
