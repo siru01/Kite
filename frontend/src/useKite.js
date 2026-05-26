@@ -95,6 +95,7 @@ export function useKite(myName, myAvatar) {
   const reconnTimerRef = useRef(null)
   const unmountedRef   = useRef(false)
   const iceServersRef  = useRef(ICE_SERVERS)
+  const earlyIceCandidates = useRef({}) // peerId -> candidate[]
 
   // ── Transfer helpers ──────────────────────────────────────────────────────
 
@@ -253,7 +254,11 @@ export function useKite(myName, myAvatar) {
       }
     }
 
-    peerConns.current[peerId] = { pc, dc: null, iceQueue: [] }
+    // Process early queued ICE candidates
+    const iceQueue = earlyIceCandidates.current[peerId] || []
+    delete earlyIceCandidates.current[peerId]
+
+    peerConns.current[peerId] = { pc, dc: null, iceQueue }
     return pc
   }, [wsSend, setupDataChannel, updateTransfer])
 
@@ -295,8 +300,17 @@ export function useKite(myName, myAvatar) {
   }, [])
 
   const handleIceCandidate = useCallback(async ({ from, candidate }) => {
+    if (!candidate) return
+
     const conn = peerConns.current[from]
-    if (!conn?.pc || !candidate) return
+    if (!conn?.pc) {
+      // Connection not created yet, queue it early
+      if (!earlyIceCandidates.current[from]) {
+        earlyIceCandidates.current[from] = []
+      }
+      earlyIceCandidates.current[from].push(candidate)
+      return
+    }
 
     if (!conn.pc.remoteDescription) {
       if (!conn.iceQueue) conn.iceQueue = []
