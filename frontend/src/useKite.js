@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-const CHUNK_SIZE = 64 * 1024 // 64 KB
+const CHUNK_SIZE = 256 * 1024 // 256 KB (Maximum safe limit for cross-browser WebRTC compatibility)
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTOCOL}//${window.location.host}/ws`
