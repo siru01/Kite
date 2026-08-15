@@ -49,7 +49,7 @@ export default function App() {
     return () => ch.close()
   }, [])
 
-  const { myId, localIp, peers, status, transfers, sendFile, cancelTransfer, clearTransfer } = useKite(joinedAs, selectedAvatar)
+  const { myId, localIp, peers, status, transfers, sendFile, acceptTransfer, declineTransfer, cancelTransfer, clearTransfer } = useKite(joinedAs, selectedAvatar)
 
   const handleJoin = (e) => {
     e.preventDefault()
@@ -225,6 +225,8 @@ export default function App() {
               <div className={styles.transferSection}>
                 <TransferList
                   transfers={transfers}
+                  onAccept={acceptTransfer}
+                  onDecline={declineTransfer}
                   onCancel={cancelTransfer}
                   onClear={clearTransfer}
                 />

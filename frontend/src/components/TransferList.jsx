@@ -10,7 +10,7 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`
 }
 
-export default function TransferList({ transfers, onCancel, onClear }) {
+export default function TransferList({ transfers, onAccept, onDecline, onCancel, onClear }) {
   const [previewFile, setPreviewFile] = useState(null)
 
   const handleDownload = (transfer) => {
@@ -97,69 +97,113 @@ export default function TransferList({ transfers, onCancel, onClear }) {
         </button>
       </div>
 
-      {/* 2-column grid */}
+      {/* Grid of transfer items */}
       <div className={styles.grid}>
-        {[...transfers].reverse().map(t => (
-          <div key={t.id} className={`${styles.item} ${t.cancelled ? styles.cancelled : ''}`}>
-            {/* Progress bar at top of card */}
-            {!t.done && (
-              <div className={styles.progressTrack}>
-                <div
-                  className={styles.progressBar}
-                  data-done={t.done}
-                  data-cancelled={t.cancelled}
-                  style={{ width: `${t.progress}%` }}
-                />
-              </div>
-            )}
+        {[...transfers].reverse().map(t => {
+          const isPendingConsent = t.pendingConsent && t.direction === 'receive'
 
-            <div className={styles.itemRow}>
-              {/* File name + size */}
-              <div className={styles.fileInfo}>
-                <span className={styles.fileName}>{t.name}</span>
-                <span className={styles.fileSize}>{formatBytes(t.size)}</span>
-              </div>
+          return (
+            <div
+              key={t.id}
+              className={`${styles.item} ${t.cancelled ? styles.cancelled : ''} ${isPendingConsent ? styles.consentCard : ''}`}
+            >
+              {/* Progress bar at top of card */}
+              {!t.done && !isPendingConsent && (
+                <div className={styles.progressTrack}>
+                  <div
+                    className={styles.progressBar}
+                    data-done={t.done}
+                    data-cancelled={t.cancelled}
+                    style={{ width: `${t.progress}%` }}
+                  />
+                </div>
+              )}
 
-              {/* Actions */}
-              <div className={styles.actions}>
-
-                {/* Save file — only for received */}
-                {t.done && !t.cancelled && t.direction === 'receive' && t.blob && (
-                  <button className={styles.btnSave} onClick={() => handleDownload(t)}>
-                    save file
-                  </button>
+              {/* Security Alerts / Badges */}
+              <div className={styles.badgeRow}>
+                {t.isExecutable && (
+                  <span className={styles.warningBadge} title="Exercise caution when receiving executable files">
+                    ⚠️ Executable File
+                  </span>
                 )}
-
-                {/* Sending label */}
-                {t.direction === 'send' && t.done && !t.cancelled && (
-                  <span className={styles.sentLabel}>sent ✓</span>
+                {t.e2ee && (
+                  <span className={styles.e2eeBadge} title="End-to-End Encrypted using AES-256-GCM">
+                    🔒 E2EE
+                  </span>
                 )}
-
-                {/* Cancel — in progress */}
-                {!t.done && (
-                  <button className={styles.btnCancel} onClick={() => onCancel(t.id)}>
-                    cancel
-                  </button>
-                )}
-
-                {/* Dismiss ✕ */}
-                {t.done && (
-                  <button className={styles.btnDismiss} onClick={() => onClear(t.id)}>✕</button>
+                {t.verified && (
+                  <span className={styles.verifiedBadge} title="SHA-256 checksum verified">
+                    ✓ Verified
+                  </span>
                 )}
               </div>
+
+              <div className={styles.itemRow}>
+                {/* File name + size + hash */}
+                <div className={styles.fileInfo}>
+                  <span className={styles.fileName}>{t.name}</span>
+                  <span className={styles.fileSize}>{formatBytes(t.size)}</span>
+                  {t.hash && (
+                    <span className={styles.hashPreview} title={`SHA-256: ${t.hash}`}>
+                      SHA-256: {t.hash.slice(0, 10)}...
+                    </span>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className={styles.actions}>
+                  {/* 2-Step Consent Buttons for Incoming Offers */}
+                  {isPendingConsent && (
+                    <div className={styles.consentActions}>
+                      <button className={styles.btnAccept} onClick={() => onAccept(t.id)}>
+                        Accept
+                      </button>
+                      <button className={styles.btnDecline} onClick={() => onDecline(t.id)}>
+                        Decline
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Save file — only for received */}
+                  {t.done && !t.cancelled && t.direction === 'receive' && t.blob && (
+                    <button className={styles.btnSave} onClick={() => handleDownload(t)}>
+                      save file
+                    </button>
+                  )}
+
+                  {/* Sending label */}
+                  {t.direction === 'send' && t.done && !t.cancelled && (
+                    <span className={styles.sentLabel}>sent ✓</span>
+                  )}
+
+                  {/* Cancel — in progress */}
+                  {!t.done && !isPendingConsent && (
+                    <button className={styles.btnCancel} onClick={() => onCancel(t.id)}>
+                      cancel
+                    </button>
+                  )}
+
+                  {/* Dismiss ✕ */}
+                  {t.done && (
+                    <button className={styles.btnDismiss} onClick={() => onClear(t.id)}>✕</button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status / Progress label */}
+              {!t.done && !t.cancelled && !isPendingConsent && (
+                <div className={styles.progressLabel}>
+                  {t.status === 'hashing' ? 'Hashing...' : t.status === 'waiting_consent' ? 'Waiting for recipient...' : `${t.progress}%`}
+                </div>
+              )}
+              {t.cancelled && (
+                <div className={styles.progressLabel}>
+                  Cancelled {t.error ? `(${t.error})` : ''}
+                </div>
+              )}
             </div>
-
-            {/* Progress label */}
-            {!t.done && !t.cancelled && (
-              <div className={styles.progressLabel}>{t.progress}%</div>
-            )}
-            {t.cancelled && (
-              <div className={styles.progressLabel}>
-                Cancelled {t.error ? `(${t.error})` : ''}
-              </div>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {previewFile && (

@@ -2,15 +2,29 @@
  * useKite — manages:
  *  1. WebSocket connection to the signaling server
  *  2. Native WebRTC peer connections (signaling via our own WS)
- *  3. File send/receive with chunking + progress + cancellation
+ *  3. E2EE File send/receive with AES-256-GCM + SHA-256 verification + 2-step consent handshake
  *  4. Transfer speed (MB/s) and time-remaining estimates
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
+import {
+  generateSessionKey,
+  exportRawKey,
+  importRawKey,
+  generateIV,
+  encryptChunk,
+  decryptChunk,
+  computeFileSHA256,
+  sanitizeFilename,
+  isExecutableFilename,
+} from './cryptoUtils'
 
 const CHUNK_SIZE = 256 * 1024 // 256 KB (Maximum safe limit for cross-browser WebRTC compatibility)
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTOCOL}//${window.location.host}/ws`
+const defaultHost = window.location.port === '5173'
+  ? `${window.location.hostname}:8000`
+  : window.location.host
+const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTOCOL}//${defaultHost}/ws`
 
 let defaultIceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -56,11 +70,9 @@ function makeSpeedTracker() {
     record(totalBytes) {
       const now = Date.now()
       samples.push({ t: now, bytes: totalBytes })
-      // Trim samples older than the window
       const cutoff = now - SPEED_WINDOW_MS
       while (samples.length > 1 && samples[0].t < cutoff) samples.shift()
     },
-    /** Returns { speedMBs: number, etaSeconds: number|null } */
     stats(totalBytes, fileSize) {
       if (samples.length < 2) return { speedMBs: 0, etaSeconds: null }
       const oldest = samples[0]
@@ -85,17 +97,19 @@ export function useKite(myName, myAvatar) {
   const [status, setStatus]     = useState('disconnected')
   const [transfers, setTransfers] = useState([])
 
-  const wsRef          = useRef(null)
-  const myIdRef        = useRef(null)     // sync copy — never stale in closures
-  const peerConns      = useRef({})       // peerId -> { pc, dc }
-  const incomingRef    = useRef({})       // peerId -> { id, name, size, chunks[], tracker }
-  const cancelledRef   = useRef(new Set())
-  const sendQueues     = useRef({})       // peerId -> Promise (sequential queue)
-  const backoffRef     = useRef(BACKOFF_BASE)
-  const reconnTimerRef = useRef(null)
-  const unmountedRef   = useRef(false)
-  const iceServersRef  = useRef(ICE_SERVERS)
-  const earlyIceCandidates = useRef({}) // peerId -> candidate[]
+  const wsRef               = useRef(null)
+  const myIdRef             = useRef(null)     // sync copy
+  const peerConns           = useRef({})       // peerId -> { pc, dc }
+  const incomingRef         = useRef({})       // peerId -> { id, name, size, mimeType, hash, key, chunks[], tracker }
+  const pendingOffersRef    = useRef({})       // transferId -> { peerId, meta, key }
+  const handshakesRef       = useRef({})       // transferId -> { resolve, reject }
+  const cancelledRef        = useRef(new Set())
+  const sendQueues          = useRef({})       // peerId -> Promise (sequential queue)
+  const backoffRef          = useRef(BACKOFF_BASE)
+  const reconnTimerRef      = useRef(null)
+  const unmountedRef        = useRef(false)
+  const iceServersRef       = useRef(ICE_SERVERS)
+  const earlyIceCandidates  = useRef({}) // peerId -> candidate[]
 
   // ── Transfer helpers ──────────────────────────────────────────────────────
 
@@ -113,7 +127,7 @@ export function useKite(myName, myAvatar) {
     }
   }, [])
 
-  // ── Close stale RTCPeerConnections for peers no longer in the list ────────
+  // ── Close stale RTCPeerConnections ────────────────────────────────────────
 
   const cleanStalePeerConns = useCallback((currentPeerIds) => {
     const current = new Set(currentPeerIds)
@@ -127,64 +141,171 @@ export function useKite(myName, myAvatar) {
     }
   }, [])
 
+  // ── Accept & Decline Transfers ────────────────────────────────────────────
+
+  const acceptTransfer = useCallback((transferId) => {
+    const offer = pendingOffersRef.current[transferId]
+    if (!offer) return
+
+    const { peerId, meta, key } = offer
+    incomingRef.current[peerId] = {
+      id:       meta.id,
+      name:     meta.name,
+      size:     meta.size,
+      mimeType: meta.mimeType,
+      hash:     meta.hash,
+      key:      key,
+      chunks:   [],
+      received: 0,
+      tracker:  makeSpeedTracker(),
+    }
+
+    updateTransfer(transferId, { status: 'receiving', pendingConsent: false })
+
+    const conn = peerConns.current[peerId]
+    if (conn?.dc?.readyState === 'open') {
+      conn.dc.send(JSON.stringify({ type: 'file-accept', id: transferId }))
+    }
+
+    delete pendingOffersRef.current[transferId]
+  }, [updateTransfer])
+
+  const declineTransfer = useCallback((transferId) => {
+    const offer = pendingOffersRef.current[transferId]
+    if (offer) {
+      const conn = peerConns.current[offer.peerId]
+      if (conn?.dc?.readyState === 'open') {
+        try { conn.dc.send(JSON.stringify({ type: 'file-decline', id: transferId })) } catch (_) {}
+      }
+      delete pendingOffersRef.current[transferId]
+    }
+    cancelledRef.current.add(transferId)
+    updateTransfer(transferId, { done: true, cancelled: true, error: 'Declined', pendingConsent: false })
+  }, [updateTransfer])
+
   // ── Data channel message handler ──────────────────────────────────────────
 
   const setupDataChannel = useCallback((dc, peerId) => {
     dc.binaryType = 'arraybuffer'
 
-    dc.onmessage = (e) => {
+    dc.onmessage = async (e) => {
       const data = e.data
 
       if (typeof data === 'string') {
         const msg = JSON.parse(data)
 
-        if (msg.type === 'file-meta') {
-          incomingRef.current[peerId] = {
-            id:       msg.id,
-            name:     msg.name,
-            size:     msg.size,
-            mimeType: msg.mimeType,
-            chunks:   [],
-            received: 0,
-            tracker:  makeSpeedTracker(),
+        // 1. Handshake offer received
+        if (msg.type === 'file-offer' || msg.type === 'file-meta') {
+          const cleanName = sanitizeFilename(msg.name)
+          const isExe = isExecutableFilename(cleanName)
+          let sessionKey = null
+
+          if (msg.key) {
+            try {
+              sessionKey = await importRawKey(msg.key)
+            } catch (err) {
+              console.error('[setupDataChannel] Error importing E2EE session key:', err)
+            }
           }
+
+          pendingOffersRef.current[msg.id] = {
+            peerId,
+            meta: { ...msg, name: cleanName },
+            key: sessionKey
+          }
+
           addTransfer({
-            id:         msg.id,
-            name:       msg.name,
-            size:       msg.size,
-            mimeType:   msg.mimeType,
-            progress:   0,
-            direction:  'receive',
-            done:       false,
-            cancelled:  false,
-            blob:       null,
-            speedMBs:   0,
-            etaSeconds: null,
+            id:             msg.id,
+            name:           cleanName,
+            size:           msg.size,
+            mimeType:       msg.mimeType,
+            hash:           msg.hash,
+            isExecutable:   isExe,
+            e2ee:           !!msg.key,
+            pendingConsent: true,
+            progress:       0,
+            direction:      'receive',
+            done:           false,
+            cancelled:      false,
+            blob:           null,
+            speedMBs:       0,
+            etaSeconds:     null,
           })
           return
         }
 
-        if (msg.type === 'file-end') {
-          const inc = incomingRef.current[peerId]
-          if (inc && inc.id === msg.id) {
-            const finalMime = getMimeType(inc.mimeType, inc.name)
-            const blob = new Blob(inc.chunks, { type: finalMime })
-            updateTransfer(inc.id, { progress: 100, done: true, blob, speedMBs: 0, etaSeconds: null })
-            delete incomingRef.current[peerId]
+        // 2. Sender received acceptance from receiver
+        if (msg.type === 'file-accept') {
+          if (handshakesRef.current[msg.id]) {
+            handshakesRef.current[msg.id].resolve(true)
+            delete handshakesRef.current[msg.id]
           }
           return
         }
 
+        // 3. Sender received decline from receiver
+        if (msg.type === 'file-decline') {
+          if (handshakesRef.current[msg.id]) {
+            handshakesRef.current[msg.id].resolve(false)
+            delete handshakesRef.current[msg.id]
+          }
+          return
+        }
+
+        // 4. File transfer finished -> compute SHA-256 integrity hash
+        if (msg.type === 'file-end') {
+          const inc = incomingRef.current[peerId]
+          if (inc && inc.id === msg.id) {
+            try {
+              const finalMime = getMimeType(inc.mimeType, inc.name)
+              const blob = new Blob(inc.chunks, { type: finalMime })
+
+              // Verify master SHA-256 file checksum if provided
+              if (inc.hash) {
+                const computedHash = await computeFileSHA256(blob)
+                if (computedHash !== inc.hash) {
+                  updateTransfer(inc.id, {
+                    done: true,
+                    cancelled: true,
+                    error: 'Integrity verification failed (SHA-256 checksum mismatch)',
+                    speedMBs: 0,
+                    etaSeconds: null
+                  })
+                  delete incomingRef.current[peerId]
+                  return
+                }
+              }
+
+              updateTransfer(inc.id, {
+                progress: 100,
+                done: true,
+                verified: true,
+                blob,
+                speedMBs: 0,
+                etaSeconds: null
+              })
+            } catch (err) {
+              console.error('[file-end] Error processing file:', err)
+              updateTransfer(inc.id, { done: true, cancelled: true, error: 'File assembly failed' })
+            } finally {
+              delete incomingRef.current[peerId]
+            }
+          }
+          return
+        }
+
+        // 5. Transfer cancelled
         if (msg.type === 'file-cancel') {
           cancelledRef.current.add(msg.id)
           updateTransfer(msg.id, { done: true, cancelled: true })
           const inc = incomingRef.current[peerId]
           if (inc?.id === msg.id) delete incomingRef.current[peerId]
+          delete pendingOffersRef.current[msg.id]
           return
         }
 
       } else {
-        // Binary chunk
+        // Binary encrypted chunk (12-byte IV + encrypted AES-256 payload)
         const inc = incomingRef.current[peerId]
         if (!inc) return
         if (cancelledRef.current.has(inc.id)) {
@@ -192,13 +313,26 @@ export function useKite(myName, myAvatar) {
           return
         }
 
-        inc.chunks.push(data)
-        inc.received += data.byteLength
-        inc.tracker.record(inc.received)
+        try {
+          let chunkData = data
+          if (inc.key && data.byteLength > 12) {
+            const iv = new Uint8Array(data, 0, 12)
+            const encryptedPayload = data.slice(12)
+            chunkData = await decryptChunk(encryptedPayload, inc.key, iv)
+          }
 
-        const progress = Math.round((inc.received / inc.size) * 100)
-        const { speedMBs, etaSeconds } = inc.tracker.stats(inc.received, inc.size)
-        updateTransfer(inc.id, { progress, speedMBs, etaSeconds })
+          inc.chunks.push(chunkData)
+          inc.received += chunkData.byteLength
+          inc.tracker.record(inc.received)
+
+          const progress = Math.round((inc.received / inc.size) * 100)
+          const { speedMBs, etaSeconds } = inc.tracker.stats(inc.received, inc.size)
+          updateTransfer(inc.id, { progress, speedMBs, etaSeconds })
+        } catch (err) {
+          console.error('[DC binary] Chunk decryption / processing error:', err)
+          updateTransfer(inc.id, { done: true, cancelled: true, error: 'Chunk decryption failed' })
+          delete incomingRef.current[peerId]
+        }
       }
     }
 
@@ -210,6 +344,7 @@ export function useKite(myName, myAvatar) {
         delete incomingRef.current[peerId]
       }
     }
+
     dc.onclose = () => {
       delete peerConns.current[peerId]
       const inc = incomingRef.current[peerId]
@@ -223,36 +358,26 @@ export function useKite(myName, myAvatar) {
   // ── Create RTCPeerConnection ───────────────────────────────────────────────
 
   const createPc = useCallback((peerId) => {
-    // Close any existing connection for this peer first
     const existing = peerConns.current[peerId]
     if (existing?.pc) {
       try { existing.pc.close() } catch (_) {}
     }
 
-    console.log('[Kite] Creating RTCPeerConnection with ICE Servers:', iceServersRef.current)
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
     pc.onicecandidate = (e) => {
-      console.log('[Kite] Local ICE Candidate generated:', e.candidate)
       if (e.candidate) wsSend({ type: 'ice-candidate', target: peerId, candidate: e.candidate })
-    }
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('[Kite] ICE Connection State Change:', pc.iceConnectionState)
     }
 
     pc.ondatachannel = (e) => {
       const dc = e.channel
-      console.log('[Kite] Received data channel:', dc.label)
       if (peerConns.current[peerId]) peerConns.current[peerId].dc = dc
       setupDataChannel(dc, peerId)
     }
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState
-      console.log('[Kite] Connection State Change:', state)
       if (state === 'failed' || state === 'closed') {
-        // Cancel active incoming transfer if peer connection fails
         const inc = incomingRef.current[peerId]
         if (inc) {
           updateTransfer(inc.id, { done: true, cancelled: true, error: `Connection ${state}` })
@@ -262,7 +387,6 @@ export function useKite(myName, myAvatar) {
       }
     }
 
-    // Process early queued ICE candidates
     const iceQueue = earlyIceCandidates.current[peerId] || []
     delete earlyIceCandidates.current[peerId]
 
@@ -276,7 +400,6 @@ export function useKite(myName, myAvatar) {
     const pc = createPc(from)
     await pc.setRemoteDescription(new RTCSessionDescription(offer))
     
-    // Process queued candidates
     const conn = peerConns.current[from]
     if (conn?.iceQueue) {
       for (const cand of conn.iceQueue) {
@@ -295,8 +418,6 @@ export function useKite(myName, myAvatar) {
     const conn = peerConns.current[from]
     if (conn?.pc) {
       await conn.pc.setRemoteDescription(new RTCSessionDescription(answer))
-      
-      // Process queued candidates
       if (conn.iceQueue) {
         for (const cand of conn.iceQueue) {
           try { await conn.pc.addIceCandidate(new RTCIceCandidate(cand)) }
@@ -312,7 +433,6 @@ export function useKite(myName, myAvatar) {
 
     const conn = peerConns.current[from]
     if (!conn?.pc) {
-      // Connection not created yet, queue it early
       if (!earlyIceCandidates.current[from]) {
         earlyIceCandidates.current[from] = []
       }
@@ -327,14 +447,13 @@ export function useKite(myName, myAvatar) {
     }
 
     try {
-      console.log('[Kite] Adding remote ICE Candidate from', from, ':', candidate)
       await conn.pc.addIceCandidate(new RTCIceCandidate(candidate))
     } catch (e) {
       console.warn('[Kite] ICE Error adding candidate:', e)
     }
   }, [])
 
-  // ── Connect to peer (initiator) ───────────────────────────────────────────
+  // ── Connect to peer ───────────────────────────────────────────────────────
 
   const connectToPeer = useCallback(async (peerId) => {
     const existing = peerConns.current[peerId]
@@ -344,7 +463,6 @@ export function useKite(myName, myAvatar) {
     const dc = pc.createDataChannel('kite', { ordered: true })
     peerConns.current[peerId].dc = dc
 
-    // Set up BEFORE the open promise so no messages are missed
     setupDataChannel(dc, peerId)
 
     const offer = await pc.createOffer()
@@ -354,7 +472,7 @@ export function useKite(myName, myAvatar) {
     await new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         const iceState = pc.iceConnectionState
-        reject(new Error(`Connection timed out (ICE state: ${iceState}). Check network/router.`))
+        reject(new Error(`Connection timed out (ICE state: ${iceState}). Check network.`))
       }, 30000)
 
       const cleanup = () => {
@@ -366,7 +484,7 @@ export function useKite(myName, myAvatar) {
         const state = pc.iceConnectionState
         if (state === 'failed') {
           cleanup()
-          reject(new Error('ICE connection failed — direct or relayed network path could not be established.'))
+          reject(new Error('ICE connection failed.'))
         }
       }
 
@@ -381,24 +499,30 @@ export function useKite(myName, myAvatar) {
     return dc
   }, [createPc, setupDataChannel, wsSend])
 
-  // ── Public: send file ─────────────────────────────────────────────────────
+  // ── Public: send file (E2EE + Handshake + SHA-256) ─────────────────────────
 
   const sendFile = useCallback(async (targetPeerId, file) => {
     const transferId = crypto.randomUUID?.() ??
       (Date.now().toString(36) + Math.random().toString(36).slice(2))
 
+    const cleanName = sanitizeFilename(file.name)
+    const isExe = isExecutableFilename(cleanName)
+
     addTransfer({
-      id:         transferId,
-      name:       file.name,
-      size:       file.size,
-      mimeType:   file.type,
-      progress:   0,
-      direction:  'send',
-      done:       false,
-      cancelled:  false,
-      blob:       file,
-      speedMBs:   0,
-      etaSeconds: null,
+      id:             transferId,
+      name:           cleanName,
+      size:           file.size,
+      mimeType:       file.type,
+      isExecutable:   isExe,
+      e2ee:           true,
+      status:         'hashing',
+      progress:       0,
+      direction:      'send',
+      done:           false,
+      cancelled:      false,
+      blob:           file,
+      speedMBs:       0,
+      etaSeconds:     null,
     })
 
     if (!sendQueues.current[targetPeerId]) {
@@ -409,6 +533,14 @@ export function useKite(myName, myAvatar) {
       try {
         if (cancelledRef.current.has(transferId)) return
 
+        // 1. Compute SHA-256 master hash & generate AES-256-GCM session key
+        const masterHash = await computeFileSHA256(file)
+        const sessionKey = await generateSessionKey()
+        const exportedKeyBase64 = await exportRawKey(sessionKey)
+
+        if (cancelledRef.current.has(transferId)) return
+        updateTransfer(transferId, { hash: masterHash, status: 'connecting' })
+
         let dc
         try {
           dc = await connectToPeer(targetPeerId)
@@ -418,14 +550,40 @@ export function useKite(myName, myAvatar) {
           return
         }
 
+        // 2. Send 2-step handshake file-offer to receiver
+        updateTransfer(transferId, { status: 'waiting_consent' })
+
+        const acceptedPromise = new Promise((resolve) => {
+          handshakesRef.current[transferId] = { resolve }
+          setTimeout(() => {
+            if (handshakesRef.current[transferId]) {
+              delete handshakesRef.current[transferId]
+              resolve(false)
+            }
+          }, 120000) // 2 minute timeout for peer consent
+        })
+
         dc.send(JSON.stringify({
-          type:     'file-meta',
-          id:       transferId,
-          name:     file.name,
-          size:     file.size,
-          mimeType: file.type,
+          type:         'file-offer',
+          id:           transferId,
+          name:         cleanName,
+          size:         file.size,
+          mimeType:     file.type,
+          hash:         masterHash,
+          key:          exportedKeyBase64,
+          isExecutable: isExe,
         }))
 
+        const accepted = await acceptedPromise
+
+        if (!accepted || cancelledRef.current.has(transferId)) {
+          updateTransfer(transferId, { done: true, cancelled: true, error: 'Declined or timed out by recipient' })
+          return
+        }
+
+        updateTransfer(transferId, { status: 'sending' })
+
+        // 3. Encrypt & stream binary chunks
         const tracker = makeSpeedTracker()
         let offset = 0
 
@@ -435,7 +593,6 @@ export function useKite(myName, myAvatar) {
             return
           }
 
-          // Backpressure: wait if buffer is filling up
           while (dc.bufferedAmount > 1024 * 1024) {
             if (cancelledRef.current.has(transferId)) {
               dc.send(JSON.stringify({ type: 'file-cancel', id: transferId }))
@@ -444,9 +601,17 @@ export function useKite(myName, myAvatar) {
             await new Promise(r => setTimeout(r, 50))
           }
 
-          const chunk = await file.slice(offset, offset + CHUNK_SIZE).arrayBuffer()
-          dc.send(chunk)
-          offset += chunk.byteLength
+          const rawChunk = await file.slice(offset, offset + CHUNK_SIZE).arrayBuffer()
+          const iv = generateIV() // 12-byte IV for AES-GCM
+          const encryptedChunk = await encryptChunk(rawChunk, sessionKey, iv)
+
+          // Packet format: [12-byte IV][Encrypted AES-GCM Payload]
+          const packet = new Uint8Array(12 + encryptedChunk.byteLength)
+          packet.set(iv, 0)
+          packet.set(new Uint8Array(encryptedChunk), 12)
+
+          dc.send(packet.buffer)
+          offset += rawChunk.byteLength
 
           tracker.record(offset)
           const { speedMBs, etaSeconds } = tracker.stats(offset, file.size)
@@ -456,7 +621,6 @@ export function useKite(myName, myAvatar) {
             etaSeconds,
           })
 
-          // Yield to the event loop so the UI can update
           await new Promise(r => setTimeout(r, 0))
         }
 
@@ -474,6 +638,10 @@ export function useKite(myName, myAvatar) {
 
   const cancelTransfer = useCallback((id) => {
     cancelledRef.current.add(id)
+    if (handshakesRef.current[id]) {
+      handshakesRef.current[id].resolve(false)
+      delete handshakesRef.current[id]
+    }
     updateTransfer(id, { done: true, cancelled: true })
     Object.values(peerConns.current).forEach(({ dc }) => {
       if (dc?.readyState === 'open') {
@@ -486,6 +654,7 @@ export function useKite(myName, myAvatar) {
 
   const clearTransfer = useCallback((id) => {
     cancelledRef.current.delete(id)
+    delete pendingOffersRef.current[id]
     setTransfers(prev => prev.filter(t => t.id !== id))
   }, [])
 
@@ -499,12 +668,11 @@ export function useKite(myName, myAvatar) {
     setStatus('connecting')
 
     ws.onopen = () => {
-      backoffRef.current = BACKOFF_BASE // reset on successful connect
+      backoffRef.current = BACKOFF_BASE
       ws.send(JSON.stringify({
         type:   'join',
         name,
         avatar,
-        // Send previously issued ID so the server can reuse it on reconnect
         id: myIdRef.current ?? undefined,
       }))
     }
@@ -513,20 +681,16 @@ export function useKite(myName, myAvatar) {
       const msg = JSON.parse(e.data)
       switch (msg.type) {
         case 'welcome':
-          console.log('[Kite] Welcome message received. Configured ICE servers:', msg.ice_servers)
           myIdRef.current = msg.id
           setMyId(msg.id)
           if (msg.local_ip)  setLocalIp(msg.local_ip)
           if (msg.port)      setServerPort(msg.port)
-          if (msg.ice_servers) {
-            iceServersRef.current = msg.ice_servers
-          }
+          if (msg.ice_servers) iceServersRef.current = msg.ice_servers
           setStatus('connected')
           break
 
         case 'peer_list':
           setPeers(msg.peers)
-          // Clean up RTCPeerConnections for peers no longer present
           cleanStalePeerConns(msg.peers.map(p => p.id))
           break
 
@@ -534,7 +698,6 @@ export function useKite(myName, myAvatar) {
         case 'answer':        handleAnswer({ from: msg.from, answer: msg.answer }); break
         case 'ice-candidate': handleIceCandidate({ from: msg.from, candidate: msg.candidate }); break
 
-        // Server heartbeat — reply immediately
         case 'ping':
           ws.send(JSON.stringify({ type: 'pong' }))
           break
@@ -544,10 +707,8 @@ export function useKite(myName, myAvatar) {
     ws.onclose = () => {
       setStatus('disconnected')
       setPeers([])
-
       if (unmountedRef.current) return
 
-      // Exponential backoff reconnect
       const delay = Math.min(backoffRef.current, BACKOFF_MAX)
       backoffRef.current = Math.min(backoffRef.current * BACKOFF_FACTOR, BACKOFF_MAX)
 
@@ -573,11 +734,8 @@ export function useKite(myName, myAvatar) {
         try { pc?.close() } catch (_) {}
       })
     }
-  }, [myName, myAvatar]) // eslint-disable-line react-hooks/exhaustive-deps
-  // connectWS is intentionally excluded — it's stable but would cause
-  // the effect to re-run on every render if included.
+  }, [myName, myAvatar])
 
-  // Filter self out via ref — never stale, no timing race
   const otherPeers = peers.filter(p => p.id !== myIdRef.current)
 
   return {
@@ -588,6 +746,8 @@ export function useKite(myName, myAvatar) {
     status,
     transfers,
     sendFile,
+    acceptTransfer,
+    declineTransfer,
     cancelTransfer,
     clearTransfer,
   }

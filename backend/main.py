@@ -7,18 +7,43 @@ import hmac
 import hashlib
 import base64
 import time
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+import urllib.parse
+import ipaddress
+import os
+from typing import Dict, Any
+from dotenv import load_dotenv
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from typing import Dict, Any
 
-import os
-from dotenv import load_dotenv
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    HAS_SLOWAPI = True
+except ImportError:
+    HAS_SLOWAPI = False
 
 load_dotenv()
 
-app = FastAPI()
+if HAS_SLOWAPI:
+    limiter = Limiter(key_func=get_remote_address)
+    app = FastAPI()
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+else:
+    app = FastAPI()
+
+    # Dummy fallback limiter decorator when slowapi is not installed
+    class DummyLimiter:
+        def limit(self, limit_string):
+            def decorator(func):
+                return func
+            return decorator
+
+    limiter = DummyLimiter()
 
 allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
 
@@ -37,8 +62,8 @@ async def add_security_headers(request: Request, call_next):
         "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data:; "
-        "connect-src 'self' ws: wss: stun:stun.l.google.com:19302 stun:stun1.l.google.com:19302 turn: turns: *.metered.ca; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self' ws: wss: turn: turns: stun:; "
         "frame-ancestors 'none';"
     )
     response.headers["Content-Security-Policy"] = csp
@@ -49,8 +74,11 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 # Structure: { peer_id: { "ws": websocket, "name": str, "avatar": str, "alive": bool } }
-# Keyed by UUID — not IP. Multiple devices behind the same NAT each get their own slot.
 active_peers: Dict[str, Dict[str, Any]] = {}
+
+# IP-based connection tracking for WebSocket rate limiting
+ws_ip_tracker: Dict[str, list[float]] = {}
+WS_MAX_CONNECTIONS_PER_MIN = 20
 
 PING_INTERVAL = 30   # seconds between server pings
 PING_TIMEOUT  = 10   # seconds to wait for pong before evicting
@@ -69,8 +97,57 @@ def get_local_ip() -> str:
 def get_server_port() -> int:
     return int(os.getenv("PORT", 8000))
 
-def get_turn_credentials(username: str, secret: str, ttl: int = 86400):
-    """Generate temporary TURN credentials using the TURN REST API authentication protocol."""
+def is_private_or_loopback_host(url_str: str) -> bool:
+    """
+    Check if a TURN/STUN URL resolves to or specifies a loopback, link-local, or RFC1918 private address.
+    Prevents SSRF attacks via malicious relay server allocations.
+    """
+    try:
+        cleaned = url_str.split(":", 1)[-1] if ":" in url_str else url_str
+        cleaned = cleaned.split("?")[0]
+        parsed = urllib.parse.urlparse(f"//{cleaned}" if not cleaned.startswith("//") else cleaned)
+        hostname = parsed.hostname or cleaned.split(":")[0]
+
+        if not hostname:
+            return False
+
+        if hostname.lower() in ("localhost", "127.0.0.1", "::1", "169.254.169.254"):
+            return True
+
+        try:
+            ip = ipaddress.ip_address(hostname)
+            return ip.is_private or ip.is_loopback or ip.is_link_local
+        except ValueError:
+            pass
+
+        return False
+    except Exception:
+        return False
+
+def filter_ice_servers(servers: list) -> list:
+    """Sanitize ICE server entries to remove target URLs pointing to internal private/loopback subnets."""
+    filtered = []
+    for server in servers:
+        urls = server.get("urls")
+        if isinstance(urls, str):
+            if not is_private_or_loopback_host(urls):
+                filtered.append(server)
+        elif isinstance(urls, list):
+            valid_urls = [u for u in urls if not is_private_or_loopback_host(u)]
+            if valid_urls:
+                srv_copy = dict(server)
+                srv_copy["urls"] = valid_urls
+                filtered.append(srv_copy)
+    return filtered
+
+def get_turn_credentials(username: str, secret: str, ttl: int | None = None):
+    """
+    Generate short-lived temporary TURN credentials using the TURN REST API authentication protocol.
+    Enforces short TTLs (default 15 mins / 900 seconds) to prevent TURN bandwidth hijacking.
+    """
+    if ttl is None:
+        ttl = int(os.getenv("TURN_TTL", 900))  # Enforce short TTL (15 minutes default)
+    
     unix_timestamp = int(time.time()) + ttl
     temp_username = f"{unix_timestamp}:{username}"
     
@@ -85,12 +162,12 @@ def get_turn_credentials(username: str, secret: str, ttl: int = 86400):
     return temp_username, temp_password
 
 def get_ice_servers():
-    """Get the list of ICE servers (STUN & TURN) to send to clients."""
-    # 1. Check if a complete ICE server config is provided in environment variables
+    """Get the sanitized list of ICE servers (STUN & TURN) with short TTL credentials to send to clients."""
     env_ice_servers = os.getenv("ICE_SERVERS")
     if env_ice_servers:
         try:
-            return json.loads(env_ice_servers)
+            parsed = json.loads(env_ice_servers)
+            return filter_ice_servers(parsed)
         except Exception as e:
             print(f"Error parsing ICE_SERVERS env variable: {e}")
             
@@ -100,7 +177,7 @@ def get_ice_servers():
         { "urls": "stun:stun.cloudflare.com:3478" }
     ]
 
-    # 2. Add static Open Relay Project credentials (highly compatible and reliable)
+    # Add static Open Relay Project credentials
     base_servers.append({
         "urls": [
             "turn:openrelay.metered.ca:80",
@@ -111,7 +188,7 @@ def get_ice_servers():
         "credential": "openrelayproject"
     })
 
-    # 3. Add dynamic credentials (REST API) using TURN_SECRET if configured, otherwise fallback
+    # Add dynamic credentials (REST API) with short TTL
     turn_secret = os.getenv("TURN_SECRET", "openrelayprojectsecret")
     turn_username = os.getenv("TURN_USERNAME", "openrelayproject")
     
@@ -133,13 +210,26 @@ def get_ice_servers():
     except Exception as e:
         print(f"Error generating dynamic TURN credentials: {e}")
 
-    return base_servers
+    return filter_ice_servers(base_servers)
 
 def get_client_ip(request: Request | WebSocket) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+def check_ws_rate_limit(client_ip: str) -> bool:
+    """Check if client IP exceeds WebSocket connection rate limits."""
+    now = time.time()
+    timestamps = ws_ip_tracker.get(client_ip, [])
+    # Keep timestamps within the last 60 seconds
+    recent = [t for t in timestamps if now - t < 60]
+    if len(recent) >= WS_MAX_CONNECTIONS_PER_MIN:
+        ws_ip_tracker[client_ip] = recent
+        return False
+    recent.append(now)
+    ws_ip_tracker[client_ip] = recent
+    return True
 
 async def broadcast_peers():
     """Send the current peer list to every connected peer."""
@@ -156,7 +246,6 @@ async def broadcast_peers():
     for pid in dead:
         active_peers.pop(pid, None)
     if dead:
-        # A send failed — re-broadcast the cleaned list
         await broadcast_peers()
 
 async def evict_peer(peer_id: str):
@@ -166,19 +255,13 @@ async def evict_peer(peer_id: str):
         await broadcast_peers()
 
 async def heartbeat(peer_id: str, ws: WebSocket):
-    """
-    Ping the client every PING_INTERVAL seconds.
-    If no pong arrives within PING_TIMEOUT, evict the peer.
-    This catches tabs that close without a clean WS close frame
-    (e.g. phone screen-off, killed tab, network drop).
-    """
+    """Ping the client every PING_INTERVAL seconds. Evict if no pong arrives."""
     while peer_id in active_peers:
         await asyncio.sleep(PING_INTERVAL)
 
         if peer_id not in active_peers:
             break
 
-        # Mark as not-alive; client must pong to stay
         active_peers[peer_id]["alive"] = False
 
         try:
@@ -187,16 +270,19 @@ async def heartbeat(peer_id: str, ws: WebSocket):
             await evict_peer(peer_id)
             return
 
-        # Wait for pong (set by message handler)
         await asyncio.sleep(PING_TIMEOUT)
 
         if peer_id in active_peers and not active_peers[peer_id].get("alive", False):
-            # No pong received — ghost peer, evict
             await evict_peer(peer_id)
             return
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    client_ip = get_client_ip(websocket)
+    if not check_ws_rate_limit(client_ip):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Rate limit exceeded")
+        return
+
     await websocket.accept()
 
     peer_id: str | None = None
@@ -213,8 +299,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 name   = msg.get("name", "Unknown Device")
                 avatar = msg.get("avatar", "a1")
 
-                # Assign a fresh UUID every join (or reuse if reconnecting
-                # with the same peer_id the server previously issued).
                 requested_id = msg.get("id")
                 if requested_id and requested_id in active_peers:
                     peer_id = requested_id
@@ -242,17 +326,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 await broadcast_peers()
 
-                # Start heartbeat for this connection
                 if heartbeat_task:
                     heartbeat_task.cancel()
                 heartbeat_task = asyncio.create_task(heartbeat(peer_id, websocket))
 
-            # ── Pong (reply to our ping) ───────────────────────────────────
+            # ── Pong ──────────────────────────────────────────────────────────
             elif msg_type == "pong":
                 if peer_id and peer_id in active_peers:
                     active_peers[peer_id]["alive"] = True
 
-            # ── WebRTC signaling ──────────────────────────────────────────
+            # ── WebRTC signaling ──────────────────────────────────────────────
             elif msg_type in ("offer", "answer", "ice-candidate"):
                 target_id = msg.get("target")
                 target    = active_peers.get(target_id)
@@ -260,7 +343,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     try:
                         await target["ws"].send_json({**msg, "from": peer_id})
                     except Exception:
-                        # Target's socket is dead — evict silently
                         await evict_peer(target_id)
 
     except WebSocketDisconnect:
@@ -275,6 +357,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @app.get("/me")
+@limiter.limit("15/minute")
 async def get_my_info(request: Request):
     return {
         "ip":       get_client_ip(request),
