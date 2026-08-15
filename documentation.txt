@@ -1,0 +1,107 @@
+================================================================================
+KITE WEBRTC FILE TRANSFER - SECURITY HARDENING & ARCHITECTURE DOCUMENTATION
+================================================================================
+
+OVERVIEW
+--------
+This document outlines the security architecture and features implemented in 
+the Kite P2P WebRTC File Transfer application. The security model addresses 
+infrastructure security, application-layer encryption, and client hardening.
+
+--------------------------------------------------------------------------------
+1. SIGNALING & INFRASTRUCTURE SECURITY
+--------------------------------------------------------------------------------
+
+[1.1] Short Time-To-Live (TTL) for Dynamic TURN Credentials
+  - Description: Dynamic TURN relay credentials generated using the TURN REST 
+    API authentication protocol enforce a strict short Time-To-Live (TTL) of 
+    15 minutes (900 seconds).
+  - Implementation: `get_turn_credentials()` in `backend/main.py` generates 
+    HMAC-SHA1 signatures encoded with an explicit Unix expiration timestamp.
+  - Risk Mitigated: Prevents attackers from harvesting long-lived TURN tokens 
+    to hijack relay bandwidth or misuse TURN proxy capacity.
+
+[1.2] Server-Side Rate Limiting
+  - Description: Enforces IP-based rate limiting on sensitive API endpoints and 
+    WebSocket signaling connections.
+  - Implementation: Integrated `slowapi` in `backend/main.py` to limit `/me` 
+    requests to 15 requests/minute per IP. Implemented in-memory connection 
+    tracking to limit WebSocket connections to 20/minute per IP.
+  - Risk Mitigated: Protects against credential harvesting spam and Denial of 
+    Service (DoS) attacks on the signaling server.
+
+[1.3] Private Subnet & SSRF Filtering on Relay Routes
+  - Description: Filters TURN/STUN URLs to prevent relay allocations from 
+    targeting internal infrastructure.
+  - Implementation: `is_private_or_loopback_host()` in `backend/main.py` checks 
+    ICE server hostnames/IPs against loopback (127.0.0.1, ::1), link-local 
+    (169.254.169.254), and RFC 1918 private IPv4 subnets (10.x.x.x, 172.16.x.x, 
+    192.168.x.x).
+  - Risk Mitigated: Prevents Server-Side Request Forgery (SSRF) and internal 
+    network scanning via misconfigured TURN relays.
+
+--------------------------------------------------------------------------------
+2. APPLICATION LAYER (WEBRTC DATACHANNEL) SECURITY
+--------------------------------------------------------------------------------
+
+[2.1] End-to-End Encryption (E2EE) with AES-256-GCM
+  - Description: Performs client-side encryption of file payloads prior to 
+    transmitting over the WebRTC DataChannel.
+  - Implementation: Uses Web Crypto API (`crypto.subtle`) in `frontend/src/cryptoUtils.js`. 
+    Generates an ephemeral 256-bit AES-GCM session key per file transfer. Each 
+    256KB binary chunk is encrypted with a unique 12-byte Initialization Vector (IV).
+  - Packet Structure: [12-byte IV][Encrypted AES-256 Payload]
+  - Key Exchange: Key metadata is exported as a raw Base64 string and sent over 
+    the DTLS-encrypted WebRTC DataChannel during the initial file offer handshake.
+  - Risk Mitigated: Guarantees confidentiality even if signaling or TURN relays 
+    attempt metadata inspection or packet logging.
+
+[2.2] File Integrity Validation via Master SHA-256 Checksums
+  - Description: Computes cryptographic SHA-256 hashes of files to verify payload 
+    integrity upon receiver assembly.
+  - Implementation: Sender computes a master SHA-256 hash using `computeFileSHA256()` 
+    before sending. Upon receiving all binary chunks, the receiver calculates 
+    the SHA-256 hash of the assembled file Blob.
+  - Failure Action: If computed hash !== master hash, the transfer is aborted 
+    and flagged with an integrity verification error.
+  - Risk Mitigated: Detects byte corruption over UDP relays and prevents malicious 
+    chunk tampering.
+
+--------------------------------------------------------------------------------
+3. FRONTEND & CLIENT HARDENING
+--------------------------------------------------------------------------------
+
+[3.1] Explicit 2-Step Peer Consent Handshake
+  - Description: Requires the recipient to explicitly review transfer details and 
+    accept before binary chunk streaming commences.
+  - Protocol Flow:
+      1. Sender sends `file-offer` JSON with metadata (name, size, SHA-256, key).
+      2. Receiver UI displays an interactive consent card with file details.
+      3. Receiver clicks "Accept" or "Decline".
+      4. Receiver sends `file-accept` or `file-decline`.
+      5. Sender starts binary chunk streaming ONLY upon receiving `file-accept`.
+  - Risk Mitigated: Prevents drive-by file transfers pushing malicious or 
+    oversized payloads directly into client memory.
+
+[3.2] Filename Sanitization & Executable Extension Filtering
+  - Description: Sanitizes file names and alerts users when receiving dangerous 
+    file formats.
+  - Implementation: `sanitizeFilename()` strips path traversal sequences (.., /, \) 
+    and control characters. `isExecutableFilename()` flags dangerous extensions 
+    (.exe, .sh, .bat, .scr, .vbs, .ps1, .cmd, .msi, .apk, .jar).
+  - UI Alert: Displays a high-visibility `⚠️ Executable File` warning badge on 
+    the consent card.
+  - Risk Mitigated: Protects users against directory traversal and social 
+    engineering malware distribution.
+
+[3.3] Content Security Policy (CSP) Restrictions
+  - Description: Restricts script, style, image, and network connection destinations.
+  - Implementation: Enforces HTTP header CSP in `backend/main.py` and matching 
+    `<meta http-equiv="Content-Security-Policy">` in `frontend/index.html`.
+  - Network Policy: `connect-src 'self' ws: wss: turn: turns: stun:`
+  - Risk Mitigated: Mitigates Cross-Site Scripting (XSS) and unauthorized WebRTC/WebSocket 
+    signaling connections.
+
+================================================================================
+DOCUMENTATION END
+================================================================================
