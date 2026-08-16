@@ -18,7 +18,7 @@ import {
   isExecutableFilename,
 } from './cryptoUtils'
 
-const CHUNK_SIZE = 64 * 1024 // 64 KB (Ensures encrypted payload + 12B IV + 16B GCM tag fits well within WebRTC SCTP maxMessageSize limit)
+const CHUNK_SIZE = 15 * 1024 // 15 KB (Guarantees total encrypted packet 15,388B fits within mobile Chrome/Safari WebRTC 16,384B maxMessageSize limit)
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 const defaultHost = window.location.port === '5173'
