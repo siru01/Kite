@@ -533,9 +533,11 @@ export function useKite(myName, myAvatar) {
       try {
         if (cancelledRef.current.has(transferId)) return
 
-        // 1. Compute SHA-256 master hash & generate AES-256-GCM session key
-        const masterHash = await computeFileSHA256(file)
-        const sessionKey = await generateSessionKey()
+        // 1. Compute SHA-256 master hash & generate AES-256-GCM session key IN PARALLEL
+        const [masterHash, sessionKey] = await Promise.all([
+          computeFileSHA256(file),
+          generateSessionKey()
+        ])
         const exportedKeyBase64 = await exportRawKey(sessionKey)
 
         if (cancelledRef.current.has(transferId)) return
@@ -583,9 +585,13 @@ export function useKite(myName, myAvatar) {
 
         updateTransfer(transferId, { status: 'sending' })
 
-        // 3. Encrypt & stream binary chunks
+        // 3. Ultra-fast Encrypt & stream binary chunks
         const tracker = makeSpeedTracker()
         let offset = 0
+        let chunkIdx = 0
+
+        // Set low threshold on DataChannel for optimal backpressure
+        try { dc.bufferedAmountLowThreshold = 128 * 1024 } catch (_) {}
 
         while (offset < file.size) {
           if (cancelledRef.current.has(transferId)) {
@@ -593,12 +599,13 @@ export function useKite(myName, myAvatar) {
             return
           }
 
-          while (dc.bufferedAmount > 1024 * 1024) {
+          // Backpressure: only pause briefly if buffer exceeds threshold
+          while (dc.bufferedAmount > 256 * 1024) {
             if (cancelledRef.current.has(transferId)) {
               dc.send(JSON.stringify({ type: 'file-cancel', id: transferId }))
               return
             }
-            await new Promise(r => setTimeout(r, 50))
+            await new Promise(r => setTimeout(r, 10))
           }
 
           const rawChunk = await file.slice(offset, offset + CHUNK_SIZE).arrayBuffer()
@@ -612,16 +619,20 @@ export function useKite(myName, myAvatar) {
 
           dc.send(packet.buffer)
           offset += rawChunk.byteLength
+          chunkIdx++
 
           tracker.record(offset)
-          const { speedMBs, etaSeconds } = tracker.stats(offset, file.size)
-          updateTransfer(transferId, {
-            progress: Math.round((offset / file.size) * 100),
-            speedMBs,
-            etaSeconds,
-          })
-
-          await new Promise(r => setTimeout(r, 0))
+          
+          // Yield to UI event loop every 16 chunks (~240 KB) to keep UI smooth without slowing network
+          if (chunkIdx % 16 === 0 || offset >= file.size) {
+            const { speedMBs, etaSeconds } = tracker.stats(offset, file.size)
+            updateTransfer(transferId, {
+              progress: Math.round((offset / file.size) * 100),
+              speedMBs,
+              etaSeconds,
+            })
+            await new Promise(r => setTimeout(r, 0))
+          }
         }
 
         dc.send(JSON.stringify({ type: 'file-end', id: transferId }))
