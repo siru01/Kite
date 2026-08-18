@@ -763,3 +763,5 @@ export function useKite(myName, myAvatar) {
     clearTransfer,
   }
 }
+
+//made just for streak
