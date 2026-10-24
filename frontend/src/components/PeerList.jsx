@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import styles from './PeerList.module.css'
 
-export default function PeerList({ peers, myId, localIp, serverPort, onSendFile }) {
+export default function PeerList({ peers, myId, localIp, onSendFile }) {
   const fileInputRef  = useRef(null)
   const targetPeerRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(null)
@@ -46,12 +46,10 @@ export default function PeerList({ peers, myId, localIp, serverPort, onSendFile 
       return window.location.origin
     }
 
-    if (localIp && serverPort) {
-      return `http://${localIp}:${serverPort}`
-    }
-
     if (localIp) {
-      return `http://${localIp}:8000`
+      const port = window.location.port ? `:${window.location.port}` : ''
+      const protocol = window.location.protocol || 'http:'
+      return `${protocol}//${localIp}${port}`
     }
 
     return null

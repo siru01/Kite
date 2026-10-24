@@ -51,13 +51,6 @@
   gap: 1.5rem;
 }
 
-.headerAvatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #1a1a1a;
-}
 
 /* ── Join Screen Specifics ───────────────────────────────────────────────── */
 
@@ -183,9 +176,9 @@
 .btnPrimary:hover:not(:disabled) {
   background: #08060d;
   color: #e8e5e0;
-  margin-left:105x;
+  margin-left: 105px;
   width: 50%;
-  font-family: 'Nova Square', sans-serif;;
+  font-family: 'Nova Square', sans-serif;
   
 }
 
@@ -338,19 +331,6 @@
   padding-bottom: 20px;
 }
 
-.statusPill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #f4f3ec;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid #1a1a1a;
-  color: #6b6375;
-}
-
 .dot {
   width: 8px;
   height: 8px;
@@ -359,32 +339,6 @@
 }
 
 [data-status="connected"] .dot { background: #10b981; }
-
-.main {
-  flex: 1;
-  padding: 32px 24px;
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
-  position: relative;
-  z-index: 10;
-}
-
-.btnLeave {
-  background: transparent;
-  color: #6b6375;
-  border: 1px solid #1a1a1a;
-  padding: 10px 20px;
-  font-size: 13px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btnLeave:hover {
-  color: #ff0000;
-  border-color: #ff0000;
-}
 
 .tagline {
   font-size: 50px;
@@ -397,7 +351,7 @@
   font-family: 'Nova Square', sans-serif;
   font-size: 25px;
   color: #6b6375;
-  line-height: 1.5; 
+  line-height: 1.5;
 }
 
 /* ── Mobile Responsive ───────────────────────────────────────────────────── */

@@ -16,15 +16,13 @@ import {
   computeFileSHA256,
   sanitizeFilename,
   isExecutableFilename,
+  isCryptoAvailable,
 } from './cryptoUtils'
 
 const CHUNK_SIZE = 15 * 1024 // 15 KB (Guarantees total encrypted packet 15,388B fits within mobile Chrome/Safari WebRTC 16,384B maxMessageSize limit)
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const defaultHost = window.location.port === '5173'
-  ? `${window.location.hostname}:8000`
-  : window.location.host
-const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTOCOL}//${defaultHost}/ws`
+const WS_URL = import.meta.env.VITE_WS_URL || `${WS_PROTOCOL}//${window.location.host}/ws`
 
 let defaultIceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -92,7 +90,6 @@ function makeSpeedTracker() {
 export function useKite(myName, myAvatar) {
   const [myId, setMyId]         = useState(null)
   const [localIp, setLocalIp]   = useState(null)
-  const [serverPort, setServerPort] = useState(null)
   const [peers, setPeers]       = useState([])
   const [status, setStatus]     = useState('disconnected')
   const [transfers, setTransfers] = useState([])
@@ -260,10 +257,10 @@ export function useKite(myName, myAvatar) {
               const finalMime = getMimeType(inc.mimeType, inc.name)
               const blob = new Blob(inc.chunks, { type: finalMime })
 
-              // Verify master SHA-256 file checksum if provided
-              if (inc.hash) {
+              // Verify master SHA-256 file checksum if provided and crypto is available
+              if (inc.hash && isCryptoAvailable()) {
                 const computedHash = await computeFileSHA256(blob)
-                if (computedHash !== inc.hash) {
+                if (computedHash && computedHash !== inc.hash) {
                   updateTransfer(inc.id, {
                     done: true,
                     cancelled: true,
@@ -315,10 +312,14 @@ export function useKite(myName, myAvatar) {
 
         try {
           let chunkData = data
-          if (inc.key && data.byteLength > 12) {
-            const iv = new Uint8Array(data, 0, 12)
-            const encryptedPayload = data.slice(12)
-            chunkData = await decryptChunk(encryptedPayload, inc.key, iv)
+          if (inc.key && isCryptoAvailable() && data.byteLength > 12) {
+            try {
+              const iv = new Uint8Array(data, 0, 12)
+              const encryptedPayload = data.slice(12)
+              chunkData = await decryptChunk(encryptedPayload, inc.key, iv)
+            } catch (err) {
+              console.warn('[Chunk decrypt failed, keeping raw chunk]:', err)
+            }
           }
 
           inc.chunks.push(chunkData)
@@ -514,7 +515,7 @@ export function useKite(myName, myAvatar) {
       size:           file.size,
       mimeType:       file.type,
       isExecutable:   isExe,
-      e2ee:           true,
+      e2ee:           isCryptoAvailable(),
       status:         'hashing',
       progress:       0,
       direction:      'send',
@@ -533,15 +534,27 @@ export function useKite(myName, myAvatar) {
       try {
         if (cancelledRef.current.has(transferId)) return
 
-        // 1. Compute SHA-256 master hash & generate AES-256-GCM session key IN PARALLEL
-        const [masterHash, sessionKey] = await Promise.all([
-          computeFileSHA256(file),
-          generateSessionKey()
-        ])
-        const exportedKeyBase64 = await exportRawKey(sessionKey)
+        // 1. Compute SHA-256 master hash & generate AES-256-GCM session key IN PARALLEL (if Web Crypto available)
+        let masterHash = null
+        let sessionKey = null
+        let exportedKeyBase64 = null
+
+        if (isCryptoAvailable()) {
+          try {
+            const [h, sk] = await Promise.all([
+              computeFileSHA256(file),
+              generateSessionKey()
+            ])
+            masterHash = h
+            sessionKey = sk
+            exportedKeyBase64 = await exportRawKey(sessionKey)
+          } catch (e) {
+            console.warn('[E2EE] Fallback to standard DTLS transport:', e)
+          }
+        }
 
         if (cancelledRef.current.has(transferId)) return
-        updateTransfer(transferId, { hash: masterHash, status: 'connecting' })
+        updateTransfer(transferId, { hash: masterHash, e2ee: !!sessionKey, status: 'connecting' })
 
         let dc
         try {
@@ -609,15 +622,22 @@ export function useKite(myName, myAvatar) {
           }
 
           const rawChunk = await file.slice(offset, offset + CHUNK_SIZE).arrayBuffer()
-          const iv = generateIV() // 12-byte IV for AES-GCM
-          const encryptedChunk = await encryptChunk(rawChunk, sessionKey, iv)
+          let packetBuffer
 
-          // Packet format: [12-byte IV][Encrypted AES-GCM Payload]
-          const packet = new Uint8Array(12 + encryptedChunk.byteLength)
-          packet.set(iv, 0)
-          packet.set(new Uint8Array(encryptedChunk), 12)
+          if (sessionKey && isCryptoAvailable()) {
+            const iv = generateIV() // 12-byte IV for AES-GCM
+            const encryptedChunk = await encryptChunk(rawChunk, sessionKey, iv)
 
-          dc.send(packet.buffer)
+            // Packet format: [12-byte IV][Encrypted AES-GCM Payload]
+            const packet = new Uint8Array(12 + encryptedChunk.byteLength)
+            packet.set(iv, 0)
+            packet.set(new Uint8Array(encryptedChunk), 12)
+            packetBuffer = packet.buffer
+          } else {
+            packetBuffer = rawChunk
+          }
+
+          dc.send(packetBuffer)
           offset += rawChunk.byteLength
           chunkIdx++
 
@@ -695,7 +715,6 @@ export function useKite(myName, myAvatar) {
           myIdRef.current = msg.id
           setMyId(msg.id)
           if (msg.local_ip)  setLocalIp(msg.local_ip)
-          if (msg.port)      setServerPort(msg.port)
           if (msg.ice_servers) iceServersRef.current = msg.ice_servers
           setStatus('connected')
           break
@@ -752,7 +771,6 @@ export function useKite(myName, myAvatar) {
   return {
     myId,
     localIp,
-    serverPort,
     peers: otherPeers,
     status,
     transfers,
@@ -763,5 +781,3 @@ export function useKite(myName, myAvatar) {
     clearTransfer,
   }
 }
-
-//made just for streak

@@ -76,17 +76,16 @@ p {
   margin: 0;
 }
 
-code,
-.counter {
+
+
+code {
   font-family: 'Courier New', 'Courier', monospace;
   display: inline-flex;
   border-radius: 4px;
   color: #08060d;
-}
-
-code {
   font-size: 15px;
   line-height: 1.35;
   padding: 4px 8px;
   background: #f4f3ec;
 }
+

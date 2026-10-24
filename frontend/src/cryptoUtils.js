@@ -9,10 +9,14 @@ const EXECUTABLE_EXTENSIONS = new Set([
   'vb', 'js', 'vbe', 'wsf', 'wsh', 'pif', 'cpl'
 ])
 
+export const isCryptoAvailable = () =>
+  typeof window !== 'undefined' && !!(window.crypto && window.crypto.subtle)
+
 /**
  * Generate a 256-bit AES-GCM key for file transfer E2EE session.
  */
 export async function generateSessionKey() {
+  if (!isCryptoAvailable()) return null
   return await window.crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },
     true,
@@ -24,6 +28,7 @@ export async function generateSessionKey() {
  * Export CryptoKey to Base64 string for handshaking inside file-offer.
  */
 export async function exportRawKey(key) {
+  if (!key || !isCryptoAvailable()) return null
   const raw = await window.crypto.subtle.exportKey('raw', key)
   return arrayBufferToBase64(raw)
 }
@@ -32,6 +37,7 @@ export async function exportRawKey(key) {
  * Import Base64 string into a CryptoKey object.
  */
 export async function importRawKey(base64Key) {
+  if (!base64Key || !isCryptoAvailable()) return null
   const raw = base64ToArrayBuffer(base64Key)
   return await window.crypto.subtle.importKey(
     'raw',
@@ -53,6 +59,7 @@ export function generateIV() {
  * Encrypt an ArrayBuffer chunk using AES-256-GCM with a specified IV.
  */
 export async function encryptChunk(chunkBuffer, key, iv) {
+  if (!key || !isCryptoAvailable()) return chunkBuffer
   const encrypted = await window.crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
@@ -65,6 +72,7 @@ export async function encryptChunk(chunkBuffer, key, iv) {
  * Decrypt an encrypted ArrayBuffer chunk using AES-256-GCM and IV.
  */
 export async function decryptChunk(encryptedBuffer, key, iv) {
+  if (!key || !isCryptoAvailable()) return encryptedBuffer
   return await window.crypto.subtle.decrypt(
     { name: 'AES-GCM', iv },
     key,
@@ -76,6 +84,7 @@ export async function decryptChunk(encryptedBuffer, key, iv) {
  * Compute SHA-256 hex checksum over an ArrayBuffer.
  */
 export async function computeSHA256(arrayBuffer) {
+  if (!isCryptoAvailable()) return null
   const digestBuffer = await window.crypto.subtle.digest('SHA-256', arrayBuffer)
   const hashArray = Array.from(new Uint8Array(digestBuffer))
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
